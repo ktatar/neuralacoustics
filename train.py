@@ -26,7 +26,8 @@ from neuralacoustics.model import Net2d
 from neuralacoustics.dataset import dataset_loader
  
 # KIVANC: We should check determinism on pytorch. There is a full article about it, 
-# and there is a way to force pytorch to be strictly deterministic. 
+# and there is a way to force pytorch to be strictly deterministic:
+# https://pytorch.org/docs/stable/notes/randomness.html
 # If we go this way, we should avoid any numpy ops, and use torch ops at all times. 
 torch.manual_seed(0)
 np.random.seed(0)
