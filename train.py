@@ -19,6 +19,8 @@ from functools import partial
 
 from timeit import default_timer
 
+from Adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch 1.8]
+
 import os, sys, configparser, argparse
 
 from neuralacoustics.utils import LpLoss
@@ -160,7 +162,8 @@ print(torch.cuda.is_available())
 
 
 print(model.count_params())
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+#optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
 
 
