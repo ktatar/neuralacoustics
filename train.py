@@ -19,7 +19,7 @@ from functools import partial
 
 from timeit import default_timer
 
-from neuralacoustics.Adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch 1.8]
+from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch 1.8]
 
 import os, sys, configparser, argparse
 
