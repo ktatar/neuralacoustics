@@ -22,7 +22,7 @@ from timeit import default_timer
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch 1.8]
 
 import os, sys, configparser, argparse
-
+from pathlib import Path
 from neuralacoustics.utils import LpLoss
 from neuralacoustics.model import Net2d
 from neuralacoustics.dataset import dataset_loader
@@ -40,7 +40,7 @@ parser.add_argument('--config', type=str, default ='./default.ini' , help='path 
 args = parser.parse_args()
 
 #Get configs
-config_path = args.config
+config_path = Path(args.config)
 config = configparser.ConfigParser(allow_no_value=True)
 
 try: 
@@ -85,7 +85,7 @@ dataset_name = config['dataset'].get('name')
 
 MODEL_ID = config['dataset'].get('model_id')
 
-dataset_path = config['dataset'].get('path')
+dataset_path = Path(config['dataset'].get('path'))
 
 # retrieve dataset details and check them
 splitname = dataset_name.split('_')
@@ -102,7 +102,7 @@ gamma = splitname[7][5:]
 # prepare to save model
 model_name = 'iwe_m'+MODEL_ID+'_'+DATASET+'_n'+str(ntrain)+'+'+str(ntest)+'_e'+str(epochs)+'_m'+str(modes)+'_w'+ str(width)+'_ti'+str(T_in)+'_to'+str(T_out)+'_ws'+str(win_stride)+'_wl'+str(win_lim)+'_s'+str(S)+'_m'+mu+'_r'+rho+'_g'+gamma
 
-model_path = dataset_path[:-9]+'/models/'
+model_path = dataset_path.joinpath('models')
 
 #VIC i think this needs only a minor update, i.e., removing the padding of the location
 
@@ -240,9 +240,14 @@ final_training_loss = '{:.4f}'.format(test_l2_full / ntest)
 final_training_loss = final_training_loss.replace('.', '@')
 
 model_name = model_name+'_loss'+final_training_loss   
-model_full_path = model_path+model_name
+model_full_path = model_path.joinpath(model_name)
 
 torch.save(model, model_full_path)
 
+config_path = model_path.joinpath(model_name+'_config.ini')
+
 #path_train_err = model_path+'results/'+model_name+'_train.txt'
 #path_test_err = model_path+'results/'+model_name+'_test.txt'
+
+with open(config_path, 'w') as configfile:
+  config.write(configfile)
