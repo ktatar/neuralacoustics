@@ -244,10 +244,8 @@ model_full_path = model_path.joinpath(model_name)
 
 torch.save(model, model_full_path)
 
+# save config file #TODO save only relevant bits + results
 config_path = model_path.joinpath(model_name+'_config.ini')
-
-#path_train_err = model_path+'results/'+model_name+'_train.txt'
-#path_test_err = model_path+'results/'+model_name+'_test.txt'
 
 with open(config_path, 'w') as configfile:
   config.write(configfile)

@@ -36,6 +36,7 @@ def dataset_loader(dataset_name, dataset_path, n, win, stride=1, win_lim=-1) :
 
   # Let's avoid os, and use Pathlib instead
   files = dataset_full_path.iterdir()
+  files.pop(0) # ignore config file #VIC needs to be tested
   cp = len(files)
   rem = 0
 
