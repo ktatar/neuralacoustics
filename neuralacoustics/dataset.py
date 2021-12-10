@@ -2,7 +2,8 @@ from neuralacoustics.utils import MatReader
 from pathlib import Path
 import torch
 
-#VIC leave this as it is
+#VIC temporarily not working!
+#TODO udpate to new dataset structure
 
 def dataset_loader(dataset_name, dataset_path, n, win, stride=1, win_lim=-1) :
   # get N, T, w and h from file name
@@ -35,7 +36,7 @@ def dataset_loader(dataset_name, dataset_path, n, win, stride=1, win_lim=-1) :
   dataset_full_path = Path(dataset_path).joinpath(dataset_name + '/')
 
   # Let's avoid os, and use Pathlib instead
-  files = dataset_full_path.iterdir()
+  files = list(Path(dataset_root).glob('*')) #files = dataset_full_path.iterdir()
   files.pop(0) # ignore config file #VIC needs to be tested
   cp = len(files)
   rem = 0
