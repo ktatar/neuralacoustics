@@ -17,7 +17,7 @@ def run(dev, dt, nsteps, b, w, h, model_path, model_name, disp=False, dispRate=1
     try:
         config.read(config_path)
     except FileNotFoundError:
-        print(model_name + ': Config File Not Found In {}'.format(config_path))
+        print('dataset_visualizer: Config File Not Found In {}'.format(config_path))
         sys.exit()
 
 

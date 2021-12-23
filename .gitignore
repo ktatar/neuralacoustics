@@ -1,6 +1,7 @@
 **/datasets
 **.code-workspace
 **.pyc
+**.ipynb
 **.ipynb_checkpoints
 **/test
 **.wav

@@ -1,33 +1,12 @@
+import sys
+sys.path.append("..") # move a dir up
+
 import torch
-import matplotlib.pyplot as plt # to plot dryrun
-import matplotlib.colors as mcolors # to potentially use different color colormaps
 
-
+from neuralacoustics.data_plotter import plotDomain # to plot dryrun
 
 
 description = '2D irreducible wave equation solver, with static boundaries and acoustic parameters'
-
-
-
-
-# to visualize result
-color_halfrange = 1
-maxAmp = 20
-log_min = 10.0
-
-def plotDomain(data):
-  log_data = torch.abs(data / maxAmp)
-  log_data = (torch.log(log_data + 1e-8) + log_min)/log_min
-  log_data = torch.clamp(log_data, 0, 1)*torch.sign(data)
-
-  img = data.cpu().detach().numpy()
-  plt.imshow(img, vmin=-color_halfrange, vmax=color_halfrange)
-  #plt.imshow(img, vmin=-color_halfrange, vmax=color_halfrange, cmap=hdh_cmap) # custom colormap
-  # all this non-sense is needed to have a proper non-blocking plot
-  plt.ion()
-  plt.show()
-  plt.pause(0.001)
-
 
 
 # solver
