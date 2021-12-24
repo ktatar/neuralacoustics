@@ -19,17 +19,31 @@ config = configparser.ConfigParser(allow_no_value=True)
 try:
   config.read(config_path)
 except FileNotFoundError:
-  print('dataset_generator: Config File not found in {}'.format(config_path))
+  print('dataset_generator: Config file not found --- \'{}\''.format(config_path))
   sys.exit()
 
 
 # read params from config file
 
-# model
-model_root = Path(config['dataset_generation'].get('numerical_model_path'))
-model_name = config['dataset_generation'].get('numerical_model')
+# misc
+prj_root = config['misc'].get('PRJ_ROOT')
 
-model_path = model_root.joinpath(model_name) # model_path = model_root/model_name -> it is folder, where model script and its config file reside
+# model
+model_root_ = config['dataset_generation'].get('numerical_model_path')
+model_root = model_root_.replace('PRJ_ROOT', prj_root)
+model_root = Path(model_root)
+model_name_ = config['dataset_generation'].get('numerical_model')
+model_path = model_root.joinpath(model_name_) # model_path = model_root/model_name_ -> it is folder, where model script and its config file reside
+
+# model config file
+model_config_full_path = config['dataset_generation'].get('numerical_model_config')
+# default config has same name as model and is in same folder
+if model_config_full_path == 'default' or model_config_full_path == '' :
+  model_config_full_path = model_path.joinpath(model_name_+'.ini') # model_path/model_name_.ini 
+else :
+  model_config_full_path = model_config_full_path.replace('PRJ_ROOT', prj_root)
+  model_config_full_path = Path(model_config_full_path)
+
 
 # dataset size
 N = config['dataset_generation'].getint('N') # num of dataset entries
@@ -47,7 +61,9 @@ samplerate = config['dataset_generation'].getint('samplerate'); # Hz, probably n
 ch = config['dataset_generation'].getint('chunks') # num of chunks
 
 # dataset path
-dataset_root = Path(config['dataset_generation'].get('dataset_path'))
+dataset_root_ = config['dataset_generation'].get('dataset_path')
+dataset_root = dataset_root_.replace('PRJ_ROOT', prj_root)
+dataset_root = Path(dataset_root)
 
 dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
 
@@ -57,7 +73,14 @@ dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simu
 
 
 # load model
-model = __import__(str(model_root) + '.' + model_name + '.' + model_name, fromlist=['*']) # models_root.model_name.model_name is model script
+# we want to load the package through potential subfolders
+model_path_folders = str(model_root) # model_root is a Path object, so any "./" is removed automatically
+model_path_folders = model_path_folders.split('/')
+packages_struct = model_path_folders[0]
+for package in range(1,len(model_path_folders)-1) :
+    packages_struct += '.'+package 
+
+model = __import__(packages_struct + '.' + model_name_ + '.' + model_name_, fromlist=['*']) # models_root.model_name_.model_name_ is model script
 
 
 if torch.cuda.is_available():  
@@ -129,7 +152,7 @@ if dryrun == 0 :
 
   for b in range(num_of_batches):
     # compute all steps in full batch
-    sol, sol_t, p0 = model.run(dev, 1/samplerate, nsteps, B, w, h, model_path, model_name)
+    sol, sol_t, p0 = model.run(dev, 1/samplerate, nsteps, B, w, h, model_path, model_name_, model_config_full_path, prj_root)
     
     # store
     a[n_cnt:(n_cnt+B),...] = p0 # initial condition
@@ -182,51 +205,65 @@ if dryrun == 0 :
   # create empty config file
   config = configparser.RawConfigParser()
   config.optionxform = str # otherwise raw config parser converts all entries to lower case letters
+
   # fill it with dataset details
+  config.add_section('misc')
+  config.set('misc', 'PRJ_ROOT', prj_root)
+
   config.add_section('dataset_details')
   config.set('dataset_details', 'name', dataset_name)
-  config.set('dataset_details', 'N', N)
-  config.set('dataset_details', 'B', B)
   config.set('dataset_details', 'actual_size', actual_size)
-  config.set('dataset_details', 'w', w)
-  config.set('dataset_details', 'h', h)
-  config.set('dataset_details', 'samplerate', samplerate)
-  config.set('dataset_details', 'nsteps', nsteps)
   config.set('dataset_details', 'simulated_time_s', time_duration)
   config.set('dataset_details', 'simulation_duration_s', simulation_duration)
-  config.set('dataset_details', 'chunks', ch_cnt)
   config.set('dataset_details', 'chunk_size', ch_size)
   config.set('dataset_details', 'remainder_size', rem_size)
-  config.set('dataset_details', 'numerical_model', model_name)
+
+  config.add_section('dataset_generation')
+  config.set('dataset_generation', 'numerical_model_path', model_root_)
+  config.set('dataset_generation', 'numerical_model', model_name_)
+  # the model config file is the current log file
+  model_config_path = Path(dataset_root_).joinpath(dataset_name) # up to dataset folder, with PRJ_ROOT var
+  dataset_name = dataset_name+'.ini'
+  model_config_path = model_config_path.joinpath(dataset_name) # add file name
+  model_config_path = str(model_config_path)
+  config.set('dataset_generation', 'numerical_model_config', model_config_path)
+  config.set('dataset_generation', 'N', N)
+  config.set('dataset_generation', 'B', B)
+  config.set('dataset_generation', 'w', w)
+  config.set('dataset_generation', 'h', h)
+  config.set('dataset_generation', 'samplerate', samplerate)
+  config.set('dataset_generation', 'nsteps', nsteps)
+  config.set('dataset_generation', 'chunks', ch_cnt)
+  config.set('dataset_generation', 'dataset_path', dataset_root_)
+  config.set('dataset_generation', 'dryrun', 0)
+
 
   # then retrieve model and solver details from model config file
   model_config = configparser.ConfigParser(allow_no_value=True)
-  model_config_path = model_path.joinpath(model_name+'.ini') # model_path/model_name.ini 
+  #model_config_full_path = model_path.joinpath(model_name_+'.ini') # model_path/model_name_.ini 
   try:
-    model_config.read(model_config_path)
+    model_config.read(model_config_full_path)
   except FileNotFoundError:
-      print('dataset_generator: Model Config File Not Found In {}'.format(model_config_path))
+      print('dataset_generator: Model config file not found --- \'{}\''.format(model_config_full_path))
       sys.exit()
 
   # extract relevant bits and add them to new dataset config file
   config.add_section('numerical_model_details')
-  config.set('numerical_model_details', 'path', './'+str(model_root))
-  for (each_key, each_val) in model_config.items('details') :
+  for (each_key, each_val) in model_config.items('numerical_model_details') :
       config.set('numerical_model_details', each_key, each_val)
-  config.set('numerical_model_details', 'solver', model_config['solver'].get('solver_name'))
 
+  config.add_section('solver')
+  for (each_key, each_val) in model_config.items('solver') :
+      config.set('solver', each_key, each_val)
+  config.set('solver', 'description', model.getSolverDescription())
+  
   config.add_section('numerical_model_parameters')
-  for (each_key, each_val) in model_config.items('parameters') :
+  for (each_key, each_val) in model_config.items('numerical_model_parameters') :
       config.set('numerical_model_parameters', each_key, each_val)
 
-  config.add_section('solver_details')
-  solver_path = model_config['solver'].get('solver_path')
-  solver_path = solver_path.replace('../', '')
-  config.set('solver_details', 'path', './'+solver_path)
-  config.set('solver_details', 'description', model.getSolverDescription())
-
   # where to write it
-  config_path = dataset_path.joinpath(dataset_name+'.log')
+  config_path = dataset_path.joinpath(dataset_name)
+  config_path_ = str(config_path)
   # write
   with open(config_path, 'w') as configfile:
       config.write(configfile)
@@ -240,4 +277,4 @@ else :
   disp_rate = 1/1
   b=1 # 1 entry batch
 
-  sol, _, _ = model.run(dev, 1/samplerate, nsteps, b, w, h, model_path, model_name, True, disp_rate)
+  sol, _, _ = model.run(dev, 1/samplerate, nsteps, b, w, h, model_path, model_name_, model_config_full_path, prj_root, True, disp_rate)

@@ -14,12 +14,12 @@ def loadDataset(dataset_name, dataset_path, n, win, stride=0, win_lim=0) :
    # get dataset log file (as config file)
   config = configparser.ConfigParser(allow_no_value=True)
   dataset_full_path = Path(dataset_path).joinpath(dataset_name)
-  log_path = dataset_full_path.joinpath(dataset_name+'.log') # dataset_path/dataset_name/dataset_name.log 
+  config_path = dataset_full_path.joinpath(dataset_name+'.ini') # dataset_path/dataset_name/dataset_name.ini 
 
   try:
-      config.read(log_path)
+      config.read(config_path)
   except FileNotFoundError:
-      print('dataset_loader: Log File Not Found In {}'.format(log_path))
+      print('dataset_loader: Config gile not found --- \'{}\''.format(config_path))
       sys.exit()
 
 
@@ -28,11 +28,12 @@ def loadDataset(dataset_name, dataset_path, n, win, stride=0, win_lim=0) :
   #--------------------------------------------------------------
   # read from config file
   # get N, T, w and h, ch from file name
-  N = config['dataset_details'].getint('N')
-  T = config['dataset_details'].getint('nsteps') # num of timesteps in each dataste entry
-  w = config['dataset_details'].getint('w')
-  h = config['dataset_details'].getint('h')
-  ch = config['dataset_details'].getint('chunks') # number of chunks (files)
+  N = config['dataset_generation'].getint('N')
+  T = config['dataset_generation'].getint('nsteps') # num of timesteps in each dataste entry
+  w = config['dataset_generation'].getint('w')
+  h = config['dataset_generation'].getint('h')
+  ch = config['dataset_generation'].getint('chunks') # number of chunks (files)
+
   ch_size = config['dataset_details'].getint('chunk_size') # number of entries in each chunk (files)
   rem_size = config['dataset_details'].getint('remainder_size') # number of entries in reminder file (if any)
   rem = int(rem_size > 0) # is there reminder file?
@@ -64,7 +65,7 @@ def loadDataset(dataset_name, dataset_path, n, win, stride=0, win_lim=0) :
 
   # count number of checkpoints, their size and check for remainder file
   files = list(dataset_full_path.glob('*')) #files = dataset_full_path.iterdir()
-  files.remove(log_path) #files.pop(0) # ignore config file #VIC needs to be tested
+  files.remove(config_path) #files.pop(0) # ignore config file #VIC needs to be tested
   
   files = sorted(files) # order checkpoint files
   #print(N, T, w, h, ch, ch_size, rem, rem_size)

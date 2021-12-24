@@ -7,29 +7,28 @@ from pathlib import Path # to properly handle paths and folders on every os
 
 solver = 0 # where to load module
 
-def run(dev, dt, nsteps, b, w, h, model_path, model_name, disp=False, dispRate=1) :
+def run(dev, dt, nsteps, b, w, h, model_path, model_name, config_full_path, prj_root, disp=False, dispRate=1) :
     global solver # to prevent python from declaring solver as new local variable when used in this function
 
     # get config file
     config = configparser.ConfigParser(allow_no_value=True)
-    config_path = model_path.joinpath(model_name+'.ini') # model_path/model_name.ini 
 
     try:
-        config.read(config_path)
+        config.read(config_full_path)
     except FileNotFoundError:
-        print('dataset_visualizer: Config File Not Found In {}'.format(config_path))
+        print(model_name + ': Config file not found --- \'{}\''.format(config_full_path))
         sys.exit()
-
 
     # read from config file
     # solver
     solver_path = config['solver'].get('solver_path')
+    solver_path = solver_path.replace('PRJ_ROOT/', '') # we do not need the root, because we will use this to load the package from the root
     solver_name = config['solver'].get('solver_name')
 
     # simulation parameters
-    mu = config['parameters'].getfloat('mu') # damping factor, positive and typically way below 1
-    rho = config['parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; formally defined as rho = [c*ds/dt)]^2, with c=speed of sound in medium, ds=size of each grid point [same on x and y], dt=1/samplerate
-    gamma = config['parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
+    mu = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
+    rho = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; formally defined as rho = [c*ds/dt)]^2, with c=speed of sound in medium, ds=size of each grid point [same on x and y], dt=1/samplerate
+    gamma = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
 
 
 
@@ -61,10 +60,13 @@ def run(dev, dt, nsteps, b, w, h, model_path, model_name, disp=False, dispRate=1
     #--------------------------------------------------------------
 
     # load solver
-    # we expect a path starting with '../../' etc, to get to project root dir
-    solver_path = solver_path.replace('../', '')
-    solver_path = solver_path.replace('/', '.') # this is for potential subfolders
-    solver = __import__(solver_path + '.' + solver_name, fromlist=['*']) # models_root.model_name.model_name is model script
+    # we want to load the package through potential subfolders
+    solver_path_folders = solver_path.split('/')
+    packages_struct = solver_path_folders[0]
+    for package in range(1, len(solver_path_folders)-1) :
+        packages_struct += '.'+package 
+
+    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.path.solver_name
 
     
     #--------------------------------------------------------------
