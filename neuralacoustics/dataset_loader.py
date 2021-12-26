@@ -1,7 +1,7 @@
 import torch
 import configparser
-from neuralacoustics.utils import MatReader 
 from pathlib import Path
+from neuralacoustics.utils import MatReader 
 
 
 
@@ -17,11 +17,11 @@ def loadDataset(dataset_name, dataset_path, n, win, stride=0, win_lim=0) :
   config_path = dataset_full_path.joinpath(dataset_name+'.ini') # dataset_path/dataset_name/dataset_name.ini 
 
   try:
-      config.read(config_path)
-  except FileNotFoundError:
+    with open(config_path) as f:
+        config.read_file(f)
+  except IOError:
       print('dataset_loader: Config gile not found --- \'{}\''.format(config_path))
-      sys.exit()
-
+      quit()
 
 
 

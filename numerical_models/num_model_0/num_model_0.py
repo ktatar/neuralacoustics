@@ -1,28 +1,26 @@
-import sys
-sys.path.append("..") # move a dir up
-
 import torch
 import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
 
 solver = 0 # where to load module
 
-def run(dev, dt, nsteps, b, w, h, model_path, model_name, config_full_path, prj_root, disp=False, dispRate=1) :
+def run(dev, dt, nsteps, b, w, h, model_name, config_full_path, disp=False, dispRate=1) :
     global solver # to prevent python from declaring solver as new local variable when used in this function
 
     # get config file
     config = configparser.ConfigParser(allow_no_value=True)
 
     try:
-        config.read(config_full_path)
-    except FileNotFoundError:
+        with open(config_full_path) as f:
+            config.read_file(f)
+    except IOError:
         print(model_name + ': Config file not found --- \'{}\''.format(config_full_path))
-        sys.exit()
+        quit()
+
 
     # read from config file
     # solver
     solver_path = config['solver'].get('solver_path')
-    solver_path = solver_path.replace('PRJ_ROOT/', '') # we do not need the root, because we will use this to load the package from the root
     solver_name = config['solver'].get('solver_name')
 
     # simulation parameters
@@ -61,11 +59,13 @@ def run(dev, dt, nsteps, b, w, h, model_path, model_name, config_full_path, prj_
 
     # load solver
     # we want to load the package through potential subfolders
-    solver_path_folders = solver_path.split('/')
-    packages_struct = solver_path_folders[0]
-    for package in range(1, len(solver_path_folders)-1) :
-        packages_struct += '.'+package 
+    solver_path_folders = Path(solver_path.replace('PRJ_ROOT', '.')).parts
 
+    # create package structure by concatenating folders with '.'
+    packages_struct = solver_path_folders[0]
+    for pkg in range(1,len(solver_path_folders)) :
+        packages_struct += '.'+solver_path_folders[pkg] 
+    # load
     solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.path.solver_name
 
     

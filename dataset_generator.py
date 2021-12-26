@@ -1,8 +1,14 @@
-import configparser, argparse # to read config from ini file
-from pathlib import Path # to properly handle paths and folders on every os
 import torch
-from timeit import default_timer # to measure processing time
+import configparser, argparse # to read config from ini file
 import scipy.io # to save dataset
+from pathlib import Path # to properly handle paths and folders on every os
+from timeit import default_timer # to measure processing time
+
+
+# retrieve PRJ_ROOT
+prj_root = Path(__file__).absolute() # path and name of this script, which is in PRJ_ROOT
+prj_root = prj_root.relative_to(Path.cwd()) # path and name of current file, relative to the current working directory, i.e, from where the script was called 
+prj_root = str(prj_root.parent) # path to current file (PRJ_ROOT), relative to working dir
 
 
 #-------------------------------------------------------------------------------
@@ -10,26 +16,26 @@ import scipy.io # to save dataset
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', type=str, default ='./default.ini' , help='path to the config file')
+default_config = str(Path(prj_root).joinpath('default.ini'))
+parser.add_argument('--config', type=str, default =default_config , help='path to config file')
 args = parser.parse_args()
 
 # Get config file
 config_path = args.config
 config = configparser.ConfigParser(allow_no_value=True)
+
 try:
-  config.read(config_path)
-except FileNotFoundError:
-  print('dataset_generator: Config file not found --- \'{}\''.format(config_path))
-  sys.exit()
+    with open(config_path) as f:
+        config.read_file(f)
+except IOError:
+    print('dataset_generator: Config file not found --- \'{}\''.format(config_path))
+    quit()
 
 
 # read params from config file
 
-# misc
-prj_root = config['misc'].get('PRJ_ROOT')
-
 # model
-model_root_ = config['dataset_generation'].get('numerical_model_path')
+model_root_ = config['dataset_generation'].get('numerical_model_path') # keep original string for log
 model_root = model_root_.replace('PRJ_ROOT', prj_root)
 model_root = Path(model_root)
 model_name_ = config['dataset_generation'].get('numerical_model')
@@ -61,7 +67,7 @@ samplerate = config['dataset_generation'].getint('samplerate'); # Hz, probably n
 ch = config['dataset_generation'].getint('chunks') # num of chunks
 
 # dataset path
-dataset_root_ = config['dataset_generation'].get('dataset_path')
+dataset_root_ = config['dataset_generation'].get('dataset_path') # keep original string for log
 dataset_root = dataset_root_.replace('PRJ_ROOT', prj_root)
 dataset_root = Path(dataset_root)
 
@@ -74,13 +80,15 @@ dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simu
 
 # load model
 # we want to load the package through potential subfolders
-model_path_folders = str(model_root) # model_root is a Path object, so any "./" is removed automatically
-model_path_folders = model_path_folders.split('/')
-packages_struct = model_path_folders[0]
-for package in range(1,len(model_path_folders)-1) :
-    packages_struct += '.'+package 
+# we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
+model_path_folders = Path(model_root_.replace('PRJ_ROOT', '.')).joinpath(model_name_).parts # also add folder with same name as model
 
-model = __import__(packages_struct + '.' + model_name_ + '.' + model_name_, fromlist=['*']) # models_root.model_name_.model_name_ is model script
+# create package structure by concatenating folders with '.'
+packages_struct = model_path_folders[0]
+for pkg in range(1,len(model_path_folders)) :
+    packages_struct += '.'+model_path_folders[pkg] 
+# load 
+model = __import__(packages_struct + '.' + model_name_, fromlist=['*']) # model.path.model_name_ is model script [i.e., package]
 
 
 if torch.cuda.is_available():  
@@ -92,15 +100,35 @@ print('device:', dev)
 
 
 
-
+  # either generate full dataset and save it
 if dryrun == 0 :
-  # either generate Full Dataset and Save it
+
+  # compute name of dataset
 
   # count datastes in folder 
-  num_of_datasets = len(list(Path(dataset_root).glob('*')))
+  datasets = list(Path(dataset_root).glob('*'))
+  num_of_datasets = len(datasets)
   # choose new dataset index accordingly
   DATASET_INDEX = str(num_of_datasets+1)
 
+  name_clash = True
+
+  while name_clash :
+    name_clash = False
+    for dataset in datasets :
+      # in case a dataset with same name is there
+      if Path(dataset).parts[-1] == 'dataset_'+DATASET_INDEX :
+        name_clash = True
+        DATASET_INDEX = str(int(DATASET_INDEX)+1) # increase index
+
+  dataset_name = 'dataset_'+DATASET_INDEX
+  dataset_path = dataset_root.joinpath(dataset_name)
+
+
+
+  #-------------------------------------------------------------------------------
+  # compute meta data, e.g., duration, actual size...
+  
   time_duration = nsteps/samplerate 
   print('simulation duration: ', time_duration, 's')
 
@@ -111,12 +139,6 @@ if dryrun == 0 :
     ch = 1
 
   
-  dataset_name = 'dataset_'+DATASET_INDEX
-  dataset_path = dataset_root.joinpath(dataset_name)
-
-  print('Dataset path: ', dataset_path)
-
-
   # it is possible that not all requested points are generated,
   # depending on ratio with requested batch size
   # this is why we calculate the actual_size of the dataset once saved
@@ -142,6 +164,10 @@ if dryrun == 0 :
     l_zeros = l_zeros-1 
 
 
+
+  #-------------------------------------------------------------------------------
+  # compute full dataset and save it
+
   t1 = default_timer()
 
   # initial conditions
@@ -152,7 +178,7 @@ if dryrun == 0 :
 
   for b in range(num_of_batches):
     # compute all steps in full batch
-    sol, sol_t, p0 = model.run(dev, 1/samplerate, nsteps, B, w, h, model_path, model_name_, model_config_full_path, prj_root)
+    sol, sol_t, p0 = model.run(dev, 1/samplerate, nsteps, B, w, h, model_name_, model_config_full_path)
     
     # store
     a[n_cnt:(n_cnt+B),...] = p0 # initial condition
@@ -207,9 +233,6 @@ if dryrun == 0 :
   config.optionxform = str # otherwise raw config parser converts all entries to lower case letters
 
   # fill it with dataset details
-  config.add_section('misc')
-  config.set('misc', 'PRJ_ROOT', prj_root)
-
   config.add_section('dataset_details')
   config.set('dataset_details', 'name', dataset_name)
   config.set('dataset_details', 'actual_size', actual_size)
@@ -240,10 +263,11 @@ if dryrun == 0 :
 
   # then retrieve model and solver details from model config file
   model_config = configparser.ConfigParser(allow_no_value=True)
-  #model_config_full_path = model_path.joinpath(model_name_+'.ini') # model_path/model_name_.ini 
+
   try:
-    model_config.read(model_config_full_path)
-  except FileNotFoundError:
+      with open(model_config_full_path) as f:
+        model_config.read(model_config_full_path)
+  except IOError:
       print('dataset_generator: Model config file not found --- \'{}\''.format(model_config_full_path))
       sys.exit()
 
@@ -277,4 +301,4 @@ else :
   disp_rate = 1/1
   b=1 # 1 entry batch
 
-  sol, _, _ = model.run(dev, 1/samplerate, nsteps, b, w, h, model_path, model_name_, model_config_full_path, prj_root, True, disp_rate)
+  sol, _, _ = model.run(dev, 1/samplerate, nsteps, b, w, h, model_name_, model_config_full_path, True, disp_rate)

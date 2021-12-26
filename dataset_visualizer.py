@@ -1,9 +1,15 @@
 import torch
 import configparser, argparse # to read config from ini file
-
+from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.dataset_loader import loadDataset # to load dataset
 from neuralacoustics.data_plotter import plotDomain # to plot data entries (specific series of domains)
 
+
+
+# retrieve PRJ_ROOT
+prj_root = Path(__file__).absolute() # path and name of this script, which is in PRJ_ROOT
+prj_root = prj_root.relative_to(Path.cwd()) # path and name of current file, relative to the current working directory, i.e, from where the script was called 
+prj_root = str(prj_root.parent) # path to current file (PRJ_ROOT), relative to working dir
 
 
 #-------------------------------------------------------------------------------
@@ -11,17 +17,20 @@ from neuralacoustics.data_plotter import plotDomain # to plot data entries (spec
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', type=str, default ='./default.ini' , help='path to the config file')
+default_config = str(Path(prj_root).joinpath('default.ini'))
+parser.add_argument('--config', type=str, default =default_config , help='path to config file')
 args = parser.parse_args()
 
 # Get config file
 config_path = args.config
 config = configparser.ConfigParser(allow_no_value=True)
+
 try:
-  config.read(config_path)
-except FileNotFoundError:
-  print('dataset_generator: Config File not found in {}'.format(config_path))
-  sys.exit()
+  with open(config_path) as f:
+      config.read_file(f)
+except IOError:
+    print('dataset_visualizer: Config file not found --- \'{}\''.format(config_path))
+    quit()
 
 
 
@@ -33,6 +42,7 @@ except FileNotFoundError:
 dataset_name = config['dataset'].get('name')
 # dataset path
 dataset_path = config['dataset'].get('path')
+dataset_path = dataset_path.replace('PRJ_ROOT', prj_root)
 
 
 # total number of data points to load, i.e., specific sub-series of frames within data entries
@@ -90,8 +100,5 @@ for d_n in range(0, num_of_datapoints) :
     for f_n in range(0, frame_range) :
         print('datapoint', d_n, 'frame', f_n)
         plotDomain(datapoints[d_n, ..., f_n])
-
-
-#TODO finish dataset_loader and test this with it!
 
 
