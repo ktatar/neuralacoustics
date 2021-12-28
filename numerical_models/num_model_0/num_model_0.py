@@ -4,23 +4,23 @@ from pathlib import Path # to properly handle paths and folders on every os
 
 solver = 0 # where to load module
 
-def run(dev, dt, nsteps, b, w, h, model_name, config_full_path, disp=False, dispRate=1) :
+def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=1) :
     global solver # to prevent python from declaring solver as new local variable when used in this function
 
     # get config file
     config = configparser.ConfigParser(allow_no_value=True)
 
     try:
-        with open(config_full_path) as f:
+        with open(config_path) as f:
             config.read_file(f)
     except IOError:
-        print(model_name + ': Config file not found --- \'{}\''.format(config_full_path))
+        print(model_name + ': Config file not found --- \'{}\''.format(config_path))
         quit()
 
 
     # read from config file
     # solver
-    solver_path = config['solver'].get('solver_path')
+    solver_dir = config['solver'].get('solver_dir')
     solver_name = config['solver'].get('solver_name')
 
     # simulation parameters
@@ -40,6 +40,8 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_full_path, disp=False, disp
     gamma = torch.ones(b, h, w) * gamma
 
     # initial condition
+    torch.manual_seed(0)
+    torch.use_deterministic_algorithms(True)
     p0 = torch.randn(b, h, w)
     # examples of other initial conditions
     #p0[:,10:30,10:30] = noise[:,:,:]
@@ -59,14 +61,14 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_full_path, disp=False, disp
 
     # load solver
     # we want to load the package through potential subfolders
-    solver_path_folders = Path(solver_path.replace('PRJ_ROOT', '.')).parts
+    solver_path_folders = Path(solver_dir.replace('PRJ_ROOT', '.')).parts
 
     # create package structure by concatenating folders with '.'
     packages_struct = solver_path_folders[0]
     for pkg in range(1,len(solver_path_folders)) :
         packages_struct += '.'+solver_path_folders[pkg] 
     # load
-    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.path.solver_name
+    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
 
     
     #--------------------------------------------------------------

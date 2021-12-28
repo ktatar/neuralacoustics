@@ -1,8 +1,4 @@
-import sys
-sys.path.append("..") # move a dir up
-
 import torch
-
 from neuralacoustics.data_plotter import plotDomain # to plot dryrun
 
 

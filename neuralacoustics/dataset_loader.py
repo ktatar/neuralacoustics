@@ -5,7 +5,7 @@ from neuralacoustics.utils import MatReader
 
 
 
-def loadDataset(dataset_name, dataset_path, n, win, stride=0, win_lim=0) :
+def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0) :
   
   print('Loading dataset:', dataset_name)
 
@@ -13,14 +13,14 @@ def loadDataset(dataset_name, dataset_path, n, win, stride=0, win_lim=0) :
   #--------------------------------------------------------------
    # get dataset log file (as config file)
   config = configparser.ConfigParser(allow_no_value=True)
-  dataset_full_path = Path(dataset_path).joinpath(dataset_name)
-  config_path = dataset_full_path.joinpath(dataset_name+'.ini') # dataset_path/dataset_name/dataset_name.ini 
+  dataset_dir = Path(dataset_root).joinpath(dataset_name) # dataset_root/dataset_name
+  config_path = dataset_dir.joinpath(dataset_name+'.ini') # dataset_root/dataset_name/dataset_name.ini 
 
   try:
     with open(config_path) as f:
         config.read_file(f)
   except IOError:
-      print('dataset_loader: Config gile not found --- \'{}\''.format(config_path))
+      print('dataset_loader: Config file not found --- \'{}\''.format(config_path))
       quit()
 
 
@@ -64,8 +64,8 @@ def loadDataset(dataset_name, dataset_path, n, win, stride=0, win_lim=0) :
   assert (p_tot >= n)  
 
   # count number of checkpoints, their size and check for remainder file
-  files = list(dataset_full_path.glob('*')) #files = dataset_full_path.iterdir()
-  files.remove(config_path) #files.pop(0) # ignore config file #VIC needs to be tested
+  files = list(dataset_dir.glob('*')) #files = dataset_dir.iterdir()
+  files.remove(config_path) # ignore config file
   
   files = sorted(files) # order checkpoint files
   #print(N, T, w, h, ch, ch_size, rem, rem_size)

@@ -5,11 +5,10 @@ from neuralacoustics.dataset_loader import loadDataset # to load dataset
 from neuralacoustics.data_plotter import plotDomain # to plot data entries (specific series of domains)
 
 
-
 # retrieve PRJ_ROOT
-prj_root = Path(__file__).absolute() # path and name of this script, which is in PRJ_ROOT
-prj_root = prj_root.relative_to(Path.cwd()) # path and name of current file, relative to the current working directory, i.e, from where the script was called 
-prj_root = str(prj_root.parent) # path to current file (PRJ_ROOT), relative to working dir
+prj_root = Path(__file__).absolute() # path of this script, which is in PRJ_ROOT
+prj_root = prj_root.relative_to(Path.cwd()) # path of this script, relative to the current working directory, i.e, from where the script was called 
+prj_root = str(prj_root.parent) # dir of this script, relative to working dir (i.e, PRJ_ROOT)
 
 
 #-------------------------------------------------------------------------------
@@ -18,7 +17,7 @@ prj_root = str(prj_root.parent) # path to current file (PRJ_ROOT), relative to w
 # Parse command line arguments
 parser = argparse.ArgumentParser()
 default_config = str(Path(prj_root).joinpath('default.ini'))
-parser.add_argument('--config', type=str, default =default_config , help='path to config file')
+parser.add_argument('--config', type=str, default =default_config , help='path of config file')
 args = parser.parse_args()
 
 # Get config file
@@ -40,9 +39,9 @@ except IOError:
 
 # dataset name
 dataset_name = config['dataset'].get('name')
-# dataset path
-dataset_path = config['dataset'].get('path')
-dataset_path = dataset_path.replace('PRJ_ROOT', prj_root)
+# dataset dir
+dataset_dir = config['dataset'].get('dir')
+dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
 
 
 # total number of data points to load, i.e., specific sub-series of frames within data entries
@@ -76,7 +75,7 @@ if frame_range <= 0 :
 
 #-------------------------------------------------------------------------------
 # retrieve all data points
-u = loadDataset(dataset_name, dataset_path, n, window, stride, limit)
+u = loadDataset(dataset_name, dataset_dir, n, window, stride, limit)
 shape = list(u.shape)
 print('dataset shape:', shape)
 print('\tdataset has', shape[0], 'datapoints -> n_train+n_test')

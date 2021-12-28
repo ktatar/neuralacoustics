@@ -15,23 +15,23 @@ def add_random_noise(b_size, pnoise, w, h, min_side, max_side):
 
 
 
-def run(dev, dt, nsteps, b, w, h, model_name, config_full_path, disp=False, dispRate=1) :
+def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=1) :
     global solver # to prevent python from declaring solver as new local variable when used in this function
 
     # get config file
     config = configparser.ConfigParser(allow_no_value=True)
     
     try:
-        with open(config_full_path) as f:
+        with open(config_path) as f:
             config.read_file(f)
     except IOError:
-        print(model_name + ': Config file not found --- \'{}\''.format(config_full_path))
+        print(model_name + ': Config file not found --- \'{}\''.format(config_path))
         sys
 
 
     # read from config file
     # solver
-    solver_path = config['solver'].get('solver_path')
+    solver_dir = config['solver'].get('solver_dir')
     solver_name = config['solver'].get('solver_name')
 
     # simulation parameters
@@ -57,20 +57,22 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_full_path, disp=False, disp
     gamma = torch.ones(b, h, w) * gamma
 
     # initial condition
+    torch.manual_seed(0)
+    rd.seed(0)
     p0 = torch.zeros(b, h, w) # everywhere but bondary frame
     add_random_noise(b, p0[:, 1:h-1, 1:w-1], w, h, init_size_min, init_size_max) 
     #--------------------------------------------------------------
 
     # load solver
     # we want to load the package through potential subfolders
-    solver_path_folders = Path(solver_path.replace('PRJ_ROOT', '.')).parts
+    solver_dir_folders = Path(solver_dir.replace('PRJ_ROOT', '.')).parts
 
     # create package structure by concatenating folders with '.'
-    packages_struct = solver_path_folders[0]
-    for pkg in range(1,len(solver_path_folders)) :
-        packages_struct += '.'+solver_path_folders[pkg] 
+    packages_struct = solver_dir_folders[0]
+    for pkg in range(1,len(solver_dir_folders)) :
+        packages_struct += '.'+solver_dir_folders[pkg] 
     # load
-    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.path.solver_name
+    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
 
     
     #--------------------------------------------------------------
