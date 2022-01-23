@@ -24,8 +24,8 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     solver_name = config['solver'].get('solver_name')
 
     # simulation parameters
-    mu = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
-    rho = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; formally defined as rho = [c*ds/dt)]^2, with c=speed of sound in medium, ds=size of each grid point [same on x and y], dt=1/samplerate
+    mu = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1; defined as ( 1+(eta*dt)/2 )^-1, with eta=viscosity of medium and dt=1/samplerate
+    rho = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; defined as rho = [v*ds/dt)]^2, with v=speed of wave in medium, ds=size of each grid point [same on x and y] and dt=1/samplerate
     gamma = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
 
 
@@ -78,9 +78,9 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     return [sol, sol_t, xi0]
 
 
-def getSolverDescription():
+def getSolverInfo():
     if solver == 0:
         print(f'{model_name}: Cannot get description of solver! Model needs to be run at least once')
-        return ''
-    return solver.getDescription()
+        return {'description':  ''}
+    return solver.getInfo()
     

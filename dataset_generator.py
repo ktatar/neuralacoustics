@@ -280,7 +280,8 @@ if dryrun == 0:
   config.add_section('solver')
   for (each_key, each_val) in model_config.items('solver'):
       config.set('solver', each_key, each_val)
-  config.set('solver', 'description', model.getSolverDescription())
+  for (each_key, each_val) in model.getSolverInfo().items():
+      config.set('solver', each_key, each_val)
   
   config.add_section('numerical_model_parameters')
   for (each_key, each_val) in model_config.items('numerical_model_parameters'):

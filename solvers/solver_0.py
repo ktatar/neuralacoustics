@@ -2,8 +2,12 @@ import torch
 from neuralacoustics.data_plotter import plotDomain # to plot dryrun
 
 
-description = '2D irreducible wave equation solver, for transverse waves (xi = displacement), with static boundaries and acoustic parameters'
-
+info = {
+  'description': '2D explicit solver of irreducible wave equation, for transverse waves (xi = displacement), with static boundaries and acoustic parameters',
+  'mu': 'damping factor, positive and typically way below 1; defined as mu = (eta*dt)/2, with eta=dynamic viscosity of medium and dt=1/samplerate',
+  'rho':  '\"propagation\" factor, positive and lte 0.5; defined as rho = [v*ds/dt)]^2, with v=speed of wave in medium (also sqrt(tension/area density)), ds=size of each grid point/cell [same on x and y] and dt=1/samplerate',
+  'gamma': 'type of boundary: 0 if clamped edge, 1 if free edge'
+}
 
 # solver
 def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), excite=torch.empty(0, 1), disp=False, dispRate=1):
@@ -33,8 +37,8 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
 
   # propagation 
   prop = torch.zeros([b, h, w, 2], device=dev) # last dimension contains: mu and rho
-  prop[:,:,:,0] = mu
-  prop[:,:,:,1] = rho
+  prop[:,:,:,0] = mu 
+  prop[:,:,:,1] = rho 
 
   # boundaries
   bound = torch.zeros([b, h, w, 2], device=dev) # last dimension contains: is wall [0-no, 1-yes] and gamma [0-clamped edge, 1-free edge] -> wall indices are opposite than Hyper Drumhead case
@@ -81,8 +85,8 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
   t=0.0
   for step in range(nsteps):
 
-    # xi_next = [ 2*xi_now + (mu-1)*xi_prev + rho*(pL + pR + pT + pB - 4*xi_prev) ] / (mu+1)
-    # with pL:
+    # xi_next = [ 2*xi_now + (mu-1)*xi_prev + rho*(xiL + xiR + xiT + xiB - 4*xi_prev) ] / (mu+1)
+    # with xiL:
     # xi_now_left_neighbor -> if air
     # xi_now * 1-gamma_left_neighbor -> if boundary
 
@@ -131,5 +135,5 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
 
 
 
-def getDescription():
-  return description
+def getInfo():
+  return info

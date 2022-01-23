@@ -3,6 +3,8 @@ import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
 import random as rd
 
+from neuralacoustics.data_plotter import plotDomain 
+
 solver = 0 # where to load module
 
 
@@ -60,8 +62,31 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     torch.manual_seed(0)
     torch.use_deterministic_algorithms(True)
     rd.seed(0)
-    xi0 = torch.zeros(b, h, w) # everywhere but bondary frame
-    add_random_noise(b, xi0[:, 1:h-1, 1:w-1], w, h, init_size_min, init_size_max) 
+    #xi0 = torch.zeros(b, h, w) # everywhere but bondary frame
+    #add_random_noise(b, xi0[:, 1:h-1, 1:w-1], w, h, init_size_min, init_size_max) 
+
+    #TODO
+    # change size of xi0, to remove boundary frame
+    # make ex_input pseudo random
+    # use same input on both dimensions?
+    # single dimension frequencies?
+    # zoom in/shift the excitation wave?
+
+    ex_input = 100
+    maxf_w = w//2
+    maxf_h = h//2
+    freq = torch.zeros(b, w, maxf_h + 1)
+    freq[:, 1, 0] = ex_input
+    freq[:, 0, 1] = ex_input
+    xi0 = torch.fft.irfft2(freq)
+    stop = True
+    if stop is True:
+        print(f'freq size {freq.size()}')
+        plotDomain(freq[0,:maxf_w + 1,:], pause=2) 
+        
+        print(f'xi0 size {xi0.size()}')
+        plotDomain(xi0[0,...], pause=2) 
+        quit()
     #--------------------------------------------------------------
 
     # load solver
@@ -74,7 +99,6 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
         packages_struct += '.'+solver_dir_folders[pkg] 
     # load
     solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
-
     
     #--------------------------------------------------------------
     # run solver
