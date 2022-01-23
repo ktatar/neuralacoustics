@@ -4,7 +4,7 @@ from pathlib import Path # to properly handle paths and folders on every os
 
 solver = 0 # where to load module
 
-def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=1) :
+def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=1):
     global solver # to prevent python from declaring solver as new local variable when used in this function
 
     # get config file
@@ -14,7 +14,7 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
         with open(config_path) as f:
             config.read_file(f)
     except IOError:
-        print(model_name + ': Config file not found --- \'{}\''.format(config_path))
+        print(f'{model_name}: Config file not found --- \'{config_path}\'')
         quit()
 
 
@@ -42,19 +42,19 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     # initial condition
     torch.manual_seed(0)
     torch.use_deterministic_algorithms(True)
-    p0 = torch.randn(b, h, w)
+    xi0 = torch.randn(b, h, w)
     # examples of other initial conditions
-    #p0[:,10:30,10:30] = noise[:,:,:]
-    #p0 = torch.zeros(b, h-2, w-2)
+    #xi0[:,10:30,10:30] = noise[:,:,:]
+    #xi0 = torch.zeros(b, h-2, w-2)
     #excitation_x = w//2
     #excitation_y = h//2
-    #p0[:, excitation_y, excitation_x] = 1
+    #xi0[:, excitation_y, excitation_x] = 1
 
-    # walls
+    # boundaries
     # if not specified, default boundary frame
-    # yet, potentially model can have walls all over the domain, other than default boundary frame
-    #walls = torch.zeros(b, h, w)
-    #walls[:,h//2,:] = 1
+    # yet, potentially model can have boundaries all over the domain, other than default boundary frame
+    #bounds = torch.zeros(b, h, w)
+    #bounds[:,h//2,:] = 1
     
 
     #--------------------------------------------------------------
@@ -65,7 +65,7 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
 
     # create package structure by concatenating folders with '.'
     packages_struct = solver_path_folders[0]
-    for pkg in range(1,len(solver_path_folders)) :
+    for pkg in range(1,len(solver_path_folders)):
         packages_struct += '.'+solver_path_folders[pkg] 
     # load
     solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
@@ -73,14 +73,14 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     
     #--------------------------------------------------------------
     # run solver
-    sol, sol_t = solver.run("cpu", dt, nsteps, b, w, h, mu, rho, gamma, p0[:, 1:h-1, 1:w-1], torch.empty(0, 1), torch.empty(0, 1), disp, dispRate)
+    sol, sol_t = solver.run("cpu", dt, nsteps, b, w, h, mu, rho, gamma, xi0[:, 1:h-1, 1:w-1], torch.empty(0, 1), torch.empty(0, 1), disp, dispRate)
 
-    return [sol, sol_t, p0]
+    return [sol, sol_t, xi0]
 
 
-def getSolverDescription() :
-    if solver == 0 :
-        print(model_name + ': Cannot get description of solver! Model needs to be run at least once')
+def getSolverDescription():
+    if solver == 0:
+        print(f'{model_name}: Cannot get description of solver! Model needs to be run at least once')
         return ''
     return solver.getDescription()
     

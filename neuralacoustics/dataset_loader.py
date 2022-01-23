@@ -5,7 +5,7 @@ from neuralacoustics.utils import MatReader
 
 
 
-def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0) :
+def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0):
   
   print('Loading dataset:', dataset_name)
 
@@ -20,7 +20,7 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0) :
     with open(config_path) as f:
         config.read_file(f)
   except IOError:
-      print('dataset_loader: Config file not found --- \'{}\''.format(config_path))
+      print(f'dataset_loader: Config file not found --- \'{config_path}\'')
       quit()
 
 
@@ -44,7 +44,7 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0) :
   # data point extraction params
 
   # by default, windows are juxtaposed
-  if stride <= 0 :
+  if stride <= 0:
     stride = win
 
   # to grab only a subset of timesteps in each data entry
@@ -61,7 +61,7 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0) :
   p_tot = N * p_num # all training points in dataset
   print('\tAvailble points in dataset:', p_tot)
   print('\tPoints requested:', n)
-  assert (p_tot >= n)  
+  assert(p_tot >= n)  
 
   # count number of checkpoints, their size and check for remainder file
   files = list(dataset_dir.glob('*')) #files = dataset_dir.iterdir()
@@ -90,7 +90,7 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0) :
 
   extra_file_needed = extra_datapoints>0
 
-  print('\tRetrieved over', full_files, 'full files,', ch_size_p, 'points each')
+  print(f'\tRetrieved over {full_files} full files, {ch_size_p} points each')
 
   # check that all numbers are fine
   assert (full_files+extra_file_needed <= ch+rem)
@@ -99,15 +99,15 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0) :
   
   # first load from files we will read completely 
   cnt = 0
-  for f in range(0,full_files) :
+  for f in range(full_files):
     dataloader = MatReader(files[f])
     uu = dataloader.read_field('u')
     #print(f, files[f])
     # unroll all entries with moving window
-    for e in range(0, ch_size) :
+    for e in range(0, ch_size):
       # window extracts p_num points from each dataset entry
       #print('e', e, 'p_num', p_num)
-      for tt in range(0, p_num) :
+      for tt in range(0, p_num):
         #print('tt', tt)
         t = tt*stride
         #print('t', t)
@@ -118,19 +118,19 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0) :
   
 
   # then load any possible remainder from a further file
-  if extra_datapoints>0 :
-    print('\tPlus', extra_datapoints, 'points from further file')
+  if extra_datapoints>0:
+    print(f'\tPlus {extra_datapoints} points from further file')
     extra_entries = (extra_datapoints+0.5)//p_num # ceiling to be sure to have enough entries to unroll
     dataloader = MatReader(files[full_files])
     uu = dataloader.read_field('u')
     entry = -1
-    while cnt < n :
+    while cnt < n:
       entry = entry+1
-      for tt in range(0,p_num) :
+      for tt in range(0,p_num):
         t = tt*stride
         u[cnt:cnt+1,...] = uu[entry,:,:,t:t+win] 
         cnt = cnt+1
-        if cnt >= n :
+        if cnt >= n:
           break
 
   return u

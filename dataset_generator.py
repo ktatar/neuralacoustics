@@ -28,7 +28,7 @@ try:
   with open(config_path) as f:
       config.read_file(f)
 except IOError:
-    print('dataset_generator: Config file not found --- \'{}\''.format(config_path))
+    print(f'dataset_generator: Config file not found --- \'{config_path}\'')
     quit()
 
 
@@ -45,9 +45,9 @@ model_dir = model_root.joinpath(model_name_) # model_dir = model_root/model_name
 # model config file
 model_config_path = config['dataset_generation'].get('numerical_model_config')
 # default config has same name as model and is in same folder
-if model_config_path == 'default' or model_config_path == '' :
+if model_config_path == 'default' or model_config_path == '':
   model_config_path = model_dir.joinpath(model_name_+'.ini') # model_dir/model_name_.ini 
-else :
+else:
   model_config_path = model_config_path.replace('PRJ_ROOT', prj_root)
   model_config_path = Path(model_config_path)
 
@@ -86,7 +86,7 @@ model_path_folders = Path(model_root_.replace('PRJ_ROOT', '.')).joinpath(model_n
 
 # create package structure by concatenating folders with '.'
 packages_struct = model_path_folders[0]
-for pkg in range(1,len(model_path_folders)) :
+for pkg in range(1,len(model_path_folders)):
     packages_struct += '.'+model_path_folders[pkg] 
 # load 
 model = __import__(packages_struct + '.' + model_name_, fromlist=['*']) # model.path.model_name_ is model script [i.e., package]
@@ -102,7 +102,7 @@ print('device:', dev)
 
 
 # either generate full dataset and save it
-if dryrun == 0 :
+if dryrun == 0:
 
   # compute name of dataset
 
@@ -114,11 +114,11 @@ if dryrun == 0 :
 
   name_clash = True
 
-  while name_clash :
+  while name_clash:
     name_clash = False
-    for dataset in datasets :
+    for dataset in datasets:
       # in case a dataset with same name is there
-      if Path(dataset).parts[-1] == 'dataset_'+DATASET_INDEX :
+      if Path(dataset).parts[-1] == 'dataset_'+DATASET_INDEX:
         name_clash = True
         DATASET_INDEX = str(int(DATASET_INDEX)+1) # increase index
 
@@ -134,9 +134,9 @@ if dryrun == 0 :
   print('simulation duration: ', time_duration, 's')
 
   # num of chunks must be lower than total number of batches
-  if ch > N//B :
+  if ch > N//B:
     ch = (N//B)//2 # a chunk every other batch
-  if ch == 0 :
+  if ch == 0:
     ch = 1
 
   
@@ -161,7 +161,7 @@ if dryrun == 0 :
   # e.g., ch_num = 100 -> [0, 99] -> should be printed with only one leading zero:
   # 01, 02, ..., 98, 99
   cc = pow(10,l_zeros-1)
-  if ch <= cc :
+  if ch <= cc:
     l_zeros = l_zeros-1 
 
 
@@ -188,7 +188,7 @@ if dryrun == 0 :
     n_cnt += B
 
     # save some chunk, just in case...
-    if (b+1) % batches_per_ch == 0 : 
+    if (b+1) % batches_per_ch == 0: 
       file_name = dataset_name + '_ch' + str(ch_cnt).zfill(l_zeros) + '_' + str(n_cnt) + '.mat'
       dataset_path = dataset_dir.joinpath(file_name)
       scipy.io.savemat(dataset_path, mdict={'a': a.cpu().numpy(), 'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
@@ -198,7 +198,7 @@ if dryrun == 0 :
       a = torch.zeros(ch_size, h, w)
       u = torch.zeros(ch_size, h, w, nsteps)
       n_cnt = 0
-    elif (b+1) == num_of_batches :
+    elif (b+1) == num_of_batches:
       file_name = dataset_name + '_rem_' + str(n_cnt)  + '.mat'
       dataset_path = dataset_dir.joinpath(file_name)
       scipy.io.savemat(dataset_path, mdict={'a': a.cpu().numpy(), 'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
@@ -210,18 +210,18 @@ if dryrun == 0 :
   rem_size = rem*n_cnt
   actual_size = (ch_size * ch) + rem_size
 
-  print('\nDataset', dataset_name, 'saved in:')
+  print(f'\nDataset {dataset_name} saved in:')
   print('\t', dataset_dir)
-  print('total number of data points: {} (out of {} requested)'.format(actual_size, N))
-  if ch == 1 :
+  print(f'total number of data points: {actual_size} (out of {N} requested)')
+  if ch == 1:
     print('in a single chunk')
-  else :
-    print('split in', ch_cnt, 'chunks with', ch_size, 'datapoints each')
-    if rem :
-      print('plus remainder file with', n_cnt, 'datapoints')
+  else:
+    print(f'split in {ch_cnt} chunks with {ch_size} datapoints each')
+    if rem:
+      print(f'plus remainder file with {n_cnt} datapoints')
 
   simulation_duration = t2-t1
-  print('\nElapsed time:', simulation_duration, 's')
+  print(f'\nElapsed time:{simulation_duration} s')
 
 
 
@@ -269,21 +269,21 @@ if dryrun == 0 :
       with open(model_config_path) as f:
         model_config.read(model_config_path)
   except IOError:
-      print('dataset_generator: Model config file not found --- \'{}\''.format(model_config_path))
+      print(f'dataset_generator: Model config file not found --- \'{model_config_path}\'')
       sys.exit()
 
   # extract relevant bits and add them to new dataset config file
   config.add_section('numerical_model_details')
-  for (each_key, each_val) in model_config.items('numerical_model_details') :
+  for (each_key, each_val) in model_config.items('numerical_model_details'):
       config.set('numerical_model_details', each_key, each_val)
 
   config.add_section('solver')
-  for (each_key, each_val) in model_config.items('solver') :
+  for (each_key, each_val) in model_config.items('solver'):
       config.set('solver', each_key, each_val)
   config.set('solver', 'description', model.getSolverDescription())
   
   config.add_section('numerical_model_parameters')
-  for (each_key, each_val) in model_config.items('numerical_model_parameters') :
+  for (each_key, each_val) in model_config.items('numerical_model_parameters'):
       config.set('numerical_model_parameters', each_key, each_val)
 
   # where to write it
@@ -295,7 +295,7 @@ if dryrun == 0 :
 
 
 
-else :
+else:
   # or generate 1 data entry and visualize it
 
   disp_rate = 1/1

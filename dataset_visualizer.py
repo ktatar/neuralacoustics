@@ -28,7 +28,7 @@ try:
   with open(config_path) as f:
       config.read_file(f)
 except IOError:
-    print('dataset_visualizer: Config file not found --- \'{}\''.format(config_path))
+    print(f'dataset_visualizer: Config file not found --- \'{config_path}\'')
     quit()
 
 
@@ -53,7 +53,7 @@ window = config['dataset'].getint('window_size')
 # offset between consecutive windows
 stride = config['dataset'].getint('window_stride') 
 # by default, windows are juxtaposed
-if stride <= 0 :
+if stride <= 0:
     stride = window
 
 # maximum index of the frame (timestep) that can be retrieved from each dataset entry
@@ -69,7 +69,7 @@ datapoint_index = config['dataset_visualization'].getint('first_datapoint')
 # number of frames to plot from each visualized datapoint
 frame_range = config['dataset_visualization'].getint('frame_range') 
 # zero means all available frames
-if frame_range <= 0 :
+if frame_range <= 0:
     frame_range = window
 
 
@@ -78,11 +78,11 @@ if frame_range <= 0 :
 u = loadDataset(dataset_name, dataset_dir, n, window, stride, limit)
 shape = list(u.shape)
 print('dataset shape:', shape)
-print('\tdataset has', shape[0], 'datapoints -> n_train+n_test')
-print('\teach composed of', shape[-1], 'frames (timsteps) -> window_size')
-print('\tconsecutive datapoints are', stride, 'frames apart -> window_stride')
+print(f'\tdataset has {shape[0]} datapoints -> n_train+n_test')
+print(f'\teach composed of {shape[-1]} frames (timsteps) -> window_size')
+print(f'\tconsecutive datapoints are {stride} frames apart -> window_stride')
 if limit > 0 :
-  print('\tand there cannot be more than', limit, 'consecutive frams -> window_limit')
+  print(f'\tand there cannot be more than {limit} consecutive frams -> window_limit')
 else :
   print('\tand no limit on consecutive frames -> window_limit')
 
@@ -95,9 +95,9 @@ else :
 # this is handy when we want to visually check dataset entries
 
 datapoints = u[datapoint_index:datapoint_index+num_of_datapoints, ...]
-for d_n in range(0, num_of_datapoints) :
-    for f_n in range(0, frame_range) :
-        print('datapoint', d_n, 'frame', f_n)
+for d_n in range(0, num_of_datapoints):
+    for f_n in range(0, frame_range):
+        print(f'datapoint {d_n}, frame {f_n}')
         plotDomain(datapoints[d_n, ..., f_n])
 
 
