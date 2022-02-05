@@ -29,7 +29,8 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0):
   # read from config file
   # get N, T, w and h, ch from file name
   N = config['dataset_generation'].getint('N')
-  T = config['dataset_generation'].getint('nsteps') # num of timesteps in each dataste entry
+  T = config['dataset_generation'].getint('nsteps') # num of timesteps in each dataset entry
+  T = T+1 # starting condition + requested steps
   w = config['dataset_generation'].getint('w')
   h = config['dataset_generation'].getint('h')
   ch = config['dataset_generation'].getint('chunks') # number of chunks (files)

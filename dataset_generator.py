@@ -74,6 +74,8 @@ dataset_root = Path(dataset_root)
 
 dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
 
+dev = config['dataset_generation'].get('dev') # cpu or gpu
+
 #-------------------------------------------------------------------------------
 
 
@@ -91,13 +93,15 @@ for pkg in range(1,len(model_path_folders)):
 # load 
 model = __import__(packages_struct + '.' + model_name_, fromlist=['*']) # model.path.model_name_ is model script [i.e., package]
 
+# in case of generic gpu, check if available
+if dev == 'gpu':
+  if torch.cuda.is_available():  
+    dev = 'cuda:0'
+  else:  
+    dev = 'cpu'
+    print('dataset_generator: gpu not avaialable!')
 
-if torch.cuda.is_available():  
-  dev = "cuda:0" 
-else:  
-  dev = "cpu"
-
-print('device:', dev)
+print('Device:', dev)
 
 
 
@@ -172,17 +176,16 @@ if dryrun == 0:
   t1 = default_timer()
 
   # initial conditions
-  a = torch.zeros(ch_size, h, w)
+  #a = torch.zeros(ch_size, h, w)
   # solutions
-  u = torch.zeros(ch_size, h, w, nsteps)
+  u = torch.zeros(ch_size, h, w, nsteps+1) # +1 becase initial condition is saved at beginning of solution time series!
 
 
   for b in range(num_of_batches):
     # compute all steps in full batch
-    sol, sol_t, p0 = model.run(dev, 1/samplerate, nsteps, B, w, h, model_name_, model_config_path)
+    sol, sol_t = model.run(dev, 1/samplerate, nsteps, B, w, h, model_name_, model_config_path)
     
     # store
-    a[n_cnt:(n_cnt+B),...] = p0 # initial condition
     u[n_cnt:(n_cnt+B),...] = sol # results
 
     n_cnt += B
@@ -191,17 +194,17 @@ if dryrun == 0:
     if (b+1) % batches_per_ch == 0: 
       file_name = dataset_name + '_ch' + str(ch_cnt).zfill(l_zeros) + '_' + str(n_cnt) + '.mat'
       dataset_path = dataset_dir.joinpath(file_name)
-      scipy.io.savemat(dataset_path, mdict={'a': a.cpu().numpy(), 'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
+      #scipy.io.savemat(dataset_path, mdict={'a': a.cpu().numpy(), 'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
+      scipy.io.savemat(dataset_path, mdict={'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
       print( '\tchunk {}, {} dataset points  (up to batch {} of {})'.format(ch_cnt, ch_size, b+1, num_of_batches) )
       ch_cnt += 1
       # reset initial conditions, solutions and data point count
-      a = torch.zeros(ch_size, h, w)
-      u = torch.zeros(ch_size, h, w, nsteps)
+      u = torch.zeros(ch_size, h, w, nsteps+1) # +1 becase initial condition is repeated at beginning of solution time series!
       n_cnt = 0
     elif (b+1) == num_of_batches:
       file_name = dataset_name + '_rem_' + str(n_cnt)  + '.mat'
       dataset_path = dataset_dir.joinpath(file_name)
-      scipy.io.savemat(dataset_path, mdict={'a': a.cpu().numpy(), 'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
+      scipy.io.savemat(dataset_path, mdict={'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
       print( '\tremainder, {} dataset points (up to batch {} of {})'.format(n_cnt, b+1, num_of_batches) )
       rem = 1
 
@@ -259,6 +262,7 @@ if dryrun == 0:
   config.set('dataset_generation', 'nsteps', nsteps)
   config.set('dataset_generation', 'chunks', ch_cnt)
   config.set('dataset_generation', 'dataset_dir', dataset_root_)
+  config.set('dataset_generation', 'dev', dev)
   config.set('dataset_generation', 'dryrun', 0)
 
 
@@ -302,4 +306,8 @@ else:
   disp_rate = 1/1
   b=1 # 1 entry batch
 
-  sol, _, _ = model.run(dev, 1/samplerate, nsteps, b, w, h, model_name_, model_config_path, True, disp_rate)
+  sol, _ = model.run(dev, 1/samplerate, nsteps, b, w, h, model_name_, model_config_path, True, disp_rate)
+
+
+#VIC 
+# pass device from ini file

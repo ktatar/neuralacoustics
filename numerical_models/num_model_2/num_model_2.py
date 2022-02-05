@@ -43,6 +43,7 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     # initial conditions---can be code
     init_size_min = eval( str( config['numerical_model_parameters'].get('init_size_min') ) )   # sub matrix min size [side] 
     init_size_max = eval( str( config['numerical_model_parameters'].get('init_size_max' ) ) )   # sub matrix min size [side] 
+    seed = config['numerical_model_parameters'].getfloat('seed') # pseudo random seed, for determinism
 
     s = min(w,h)-2 # remove two cells to accomodate boundary frame
     if init_size_max > s:
@@ -59,9 +60,9 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     gamma = torch.ones(b, h, w) * gamma
 
     # initial condition
-    torch.manual_seed(0)
+    torch.manual_seed(seed)
     torch.use_deterministic_algorithms(True)
-    rd.seed(0)
+    rd.seed(seed)
     #xi0 = torch.zeros(b, h, w) # everywhere but bondary frame
     #add_random_noise(b, xi0[:, 1:h-1, 1:w-1], w, h, init_size_min, init_size_max) 
 
@@ -73,9 +74,11 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     # zoom in/shift the excitation wave?
 
     ex_input = 100
-    maxf_w = w//2
-    maxf_h = h//2
-    freq = torch.zeros(b, w, maxf_h + 1)
+    W = (w-2)
+    H = (h-2)
+    maxf_w = W//2
+    maxf_h = H//2
+    freq = torch.zeros(b, W, maxf_h + 1)
     freq[:, 1, 0] = ex_input
     freq[:, 0, 1] = ex_input
     xi0 = torch.fft.irfft2(freq)
@@ -87,6 +90,10 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
         print(f'xi0 size {xi0.size()}')
         plotDomain(xi0[0,...], pause=2) 
         quit()
+
+    excite = torch.zeros(b, h-2, w-2, nsteps+1) # nsteps+1 is the total duration of simulation -> initial condition+requested steps
+    # initial condition is first excitation
+    excite[..., 0] = xi0[...]
     #--------------------------------------------------------------
 
     # load solver
@@ -102,9 +109,9 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     
     #--------------------------------------------------------------
     # run solver
-    sol, sol_t = solver.run("cpu", dt, nsteps, b, w, h, mu, rho, gamma, xi0[:, 1:h-1, 1:w-1], torch.empty(0, 1), torch.empty(0, 1), disp, dispRate)
+    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, torch.empty(0, 1), disp, dispRate)
 
-    return [sol, sol_t, xi0]
+    return [sol, sol_t]
 
 
 def getSolverInfo():

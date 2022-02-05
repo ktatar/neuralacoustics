@@ -10,7 +10,7 @@ info = {
 }
 
 # solver
-def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), excite=torch.empty(0, 1), disp=False, dispRate=1):
+def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1), disp=False, dispRate=1):
   # check arguments
 
   # boundaries passed in
@@ -20,10 +20,12 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
     extraBound = True
 
   # excitation
-  if excite.size(dim=0) == 0:
-    exciteOn = False
+  # check if this is a continuous excitation or only an initial condition
+  if torch.count_nonzero(excite[:, :, :, 1:]) > 0:
+     exciteOn = True
   else:
-    exciteOn = True
+     exciteOn = False
+
 
   # display
   if disp:
@@ -55,14 +57,10 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
 
   # displacement
   xi = torch.zeros([b, h, w, 3], device=dev) # last dimension contains: xi prev, xi now, xi next
-  # excitation
-  if exciteOn is True:
-    full_excitation = torch.zeros([b, h, w, nsteps], device=dev) 
-    full_excitation[..., excite.size(dim=3)] = excite # embed excitation in bigger tensor that spans full simulation time
-  #excite = torch.FloatTensor([math.sin(2*math.pi*n*freq*dt) for n in range(nsteps)]).reshape(1,nsteps).repeat([b,1])
 
-  # initial condition
-  xi[:,1:h-1,1:w-1,1] = xi0 # everywhere but bondary frame
+  # excitation
+  full_excitation = torch.zeros([b, h-2, w-2, nsteps+1], device=dev) 
+  full_excitation[...] = excite[...] # copy excitation to tensor on device 
 
   xi_neigh = torch.zeros([b, h, w, 4], device=dev) # last dimension will contain: xi now of left, right, top and bottom neighbor, respectively
   bound_neigh = torch.zeros([b, h, w, 4, 2], device=dev) # second last dimension will contain: boundaries info [is wall? and gamma] of left, right, top and bottom neighbor, respectively
@@ -75,8 +73,20 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
   xi_lrtb  = torch.zeros([b, h-1, w-1, 4], device=dev) # temp tensor
 
   # where to save solutions
-  sol = torch.zeros([b,h,w,nsteps], device=dev)
-  sol_t = torch.zeros(nsteps, device=dev)
+  sol = torch.zeros([b,h,w,nsteps+1], device=dev)
+  sol_t = torch.zeros(nsteps+1, device=dev)
+  # nsteps+1 is the total duration of simulation -> initial condition+requested steps
+
+  sol[:, 1:h-1, 1:w-1, 0] = full_excitation[..., 0] # xi0, initial condition
+  sol[0] = 0.0
+
+  # if we only have an initial condition, apply it once (xi0)
+  if not exciteOn:
+    xi[:,1:h-1,1:w-1,1] = full_excitation[..., 0] # xi0 everywhere but bondary frame
+
+  #VIC note that, regardless of whether we are using an initial condition or a continuous excitation, 
+  # at the first simulation step the'previous' xi is always all zero! this smooths out a bit the effect of an initial condition
+
 
 
   #--------------------------------------------------------------
@@ -84,6 +94,10 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
 
   t=0.0
   for step in range(nsteps):
+
+    # if we have a continuous excitation over time, keep appying it
+    if exciteOn:
+      xi[:,1:h-1,1:w-1,1] += full_excitation[..., step] # at first step, this is xi0, initial condition
 
     # xi_next = [ 2*xi_now + (mu-1)*xi_prev + rho*(xiL + xiR + xiT + xiB - 4*xi_prev) ] / (mu+1)
     # with xiL:
@@ -107,10 +121,6 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
     xi[:,1:h-1,1:w-1,2] += prop[:,1:h-1,1:w-1,1]*(torch.sum(xi_lrtb,3) - 4*xi[:,1:h-1,1:w-1,1]) 
     xi[:,1:h-1,1:w-1,2] /= (prop[:,1:h-1,1:w-1,0]+1)
 
-    if exciteOn:
-      xi[:,1:h-1,1:w-1,2] += full_excitation[...,step]
-
-
     # if display, print the time step and plot the frames of the first
     # solution of the batch, at the requested rate
     if disp:
@@ -123,8 +133,8 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, xi0, bnd=torch.empty(0, 1), ex
     t += dt 
 
     # save return values
-    sol[...,step] = xi[...,2]
-    sol_t[step] = t
+    sol[...,step+1] = xi[...,2]
+    sol_t[step+1] = t
 
     # update
     xi[:,1:h-1,1:w-1,0] = xi[:,1:h-1,1:w-1,1]
