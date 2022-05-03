@@ -59,7 +59,7 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
   xi = torch.zeros([b, h, w, 3], device=dev) # last dimension contains: xi prev, xi now, xi next
 
   # excitation
-  full_excitation = torch.zeros([b, h-2, w-2, nsteps+1], device=dev) 
+  full_excitation = torch.zeros([b, h-2, w-2, nsteps], device=dev) 
   full_excitation[...] = excite[...] # copy excitation to tensor on device 
 
   xi_neigh = torch.zeros([b, h, w, 4], device=dev) # last dimension will contain: xi now of left, right, top and bottom neighbor, respectively
@@ -78,15 +78,14 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
   # nsteps+1 is the total duration of simulation -> initial condition+requested steps
 
   sol[:, 1:h-1, 1:w-1, 0] = full_excitation[..., 0] # xi0, initial condition
-  sol[0] = 0.0
+  sol_t[0] = 0.0
 
   # if we only have an initial condition, apply it once (xi0)
   if not exciteOn:
     xi[:,1:h-1,1:w-1,1] = full_excitation[..., 0] # xi0 everywhere but bondary frame
 
   #VIC note that, regardless of whether we are using an initial condition or a continuous excitation, 
-  # at the first simulation step the'previous' xi is always all zero! this smooths out a bit the effect of an initial condition
-
+  # at the first simulation step the 'previous' xi is always all zero! this smooths out a bit the effect of an initial condition
 
 
   #--------------------------------------------------------------

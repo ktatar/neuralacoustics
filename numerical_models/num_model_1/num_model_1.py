@@ -3,7 +3,16 @@ import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
 import random as rd
 
-solver = 0 # where to load module
+# to store values from load()
+solver = 0 # where to load solver
+modelName = ''
+w = -1
+h = -1
+mu = -1
+rho = -1
+gamma = -1
+init_size_min = -1
+init_size_max = -1
 
 
 # places a submatrix of noise randomly in the matrix passed as an argument (xi0)
@@ -14,20 +23,35 @@ def add_random_noise(b_size, xinoise, w, h, min_side, max_side):
   xinoise[:, rand_pos_y:(rand_pos_y + rand_size), rand_pos_x:(rand_pos_x + rand_size)] = torch.randn(b_size, rand_size, rand_size) # places the submatrix in xi0
 
 
+def load(model_name, config_path, _w, _h):    
+    # to prevent python from declaring new local variables with the same names
+    # only needed when content of variables is modfied
+    global solver 
+    global modelName
+    global w
+    global h
+    global mu
+    global rho
+    global gamma
+    global init_size_min
+    global init_size_max
 
-def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=1):
-    global solver # to prevent python from declaring solver as new local variable when used in this function
+    modelName = model_name
 
-    # get config file
+     # get config file
     config = configparser.ConfigParser(allow_no_value=True)
-    
+
     try:
         with open(config_path) as f:
             config.read_file(f)
     except IOError:
-        print(f'{model_name}: Config file not found --- \'{config_path}\'')
+        print(f'{modelName}: Config file not found --- \'{config_path}\'')
         quit()
+    
+    w = _w
+    h = _h
 
+    #--------------------------------------------------------------
 
     # read from config file
     # solver
@@ -46,27 +70,17 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     s = min(w,h)-2 # remove two cells to accomodate boundary frame
     if init_size_max > s:
         init_size_max = s
-        print(f'{model_name}: Requested init_size_max exceeds domain smaller dimension and will be clipped to {init_size_max} cells')
+        print(f'{modelName}: Requested init_size_max exceeds domain smaller dimension and will be clipped to {init_size_max} cells')
+
 
     #--------------------------------------------------------------
-    # set parameters
 
-    # propagation params, explained in solver
-    # potentially model can have different values across domain
-    mu = torch.ones(b, h, w) * mu
-    rho = torch.ones(b, h, w) * rho
-    gamma = torch.ones(b, h, w) * gamma
-
-    # initial condition
+    # for determinism of initial conditions
     torch.manual_seed(seed)
     torch.use_deterministic_algorithms(True)
     rd.seed(seed)
-    xi0 = torch.zeros(b, h-2, w-2) # everywhere but bondary frame
-    add_random_noise(b, xi0, w-2, h-2, init_size_min, init_size_max) 
+    
 
-    excite = torch.zeros(b, h-2, w-2, nsteps+1) # nsteps+1 is the total duration of simulation -> initial condition+requested steps
-    # initial condition is first excitation
-    excite[..., 0] = xi0[...]
     #--------------------------------------------------------------
 
     # load solver
@@ -80,17 +94,40 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     # load
     solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
 
+    return
+
+
+def run(dev, dt, nsteps, b, disp=False, dispRate=1):
+
+    # set parameters
+
+    # propagation params, explained in solver
+    # potentially model can have different values across domain
+    _mu = torch.ones(b, h, w) * mu
+    _rho = torch.ones(b, h, w) * rho
+    _gamma = torch.ones(b, h, w) * gamma
+
+
+    #--------------------------------------------------------------
+    # initial condition
+    xi0 = torch.zeros(b, h-2, w-2) # everywhere but bondary frame
+    add_random_noise(b, xi0, w-2, h-2, init_size_min, init_size_max) 
+
+    excite = torch.zeros(b, h-2, w-2, nsteps)
+    # initial condition is first excitation
+    excite[..., 0] = xi0[...]
     
+
     #--------------------------------------------------------------
     # run solver
-    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, torch.empty(0, 1), disp, dispRate)
+    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate)
 
     return [sol, sol_t]
 
 
 def getSolverInfo():
     if solver == 0:
-        print(f'{model_name}: Cannot get description of solver! Model needs to be run at least once')
+        print(f'{modelName}: Cannot get description of solver! Model needs to be run at least once')
         return {'description':  ''}
     return solver.getInfo()
     

@@ -44,7 +44,7 @@ dataset_dir = config['dataset'].get('dir')
 dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
 
 
-# total number of data points to load, i.e., specific sub-series of frames within data entries
+# total number of data points to load, i.e., specific sub-series of time steps within data entries
 n = config['dataset'].getint('n_train') + config['dataset'].getint('n_test') 
 
 # size of window, i.e., length of each data point
@@ -62,42 +62,49 @@ limit = config['dataset'].getint('window_limit')
 
 # number of datapoints to visualize
 num_of_datapoints = config['dataset_visualization'].getint('num_of_datapoints') 
+# at least one datapoint
+if num_of_datapoints <= 0:
+    timestep_range = 1
 
 # index of first datapoint to visualize
 datapoint_index = config['dataset_visualization'].getint('first_datapoint') 
 
-# number of frames to plot from each visualized datapoint
-frame_range = config['dataset_visualization'].getint('frame_range') 
-# zero means all available frames
-if frame_range <= 0:
-    frame_range = window
+# number of time steps to plot from each visualized datapoint
+timestep_range = config['dataset_visualization'].getint('timestep_range') 
+# zero means all available time steps
+if timestep_range <= 0:
+    timestep_range = window
 
 
 #-------------------------------------------------------------------------------
 # retrieve all data points
 u = loadDataset(dataset_name, dataset_dir, n, window, stride, limit)
+
+print(u.max())
+
+
 shape = list(u.shape)
 print('dataset shape:', shape)
 print(f'\tdataset has {shape[0]} datapoints -> n_train+n_test')
-print(f'\teach composed of {shape[-1]} frames (timsteps) -> window_size')
-print(f'\tconsecutive datapoints are {stride} frames apart -> window_stride')
-if limit > 0 :
-  print(f'\tand there cannot be more than {limit} consecutive frams -> window_limit')
+print(f'\teach composed of {shape[-1]} timsteps -> window_size')
+print(f'\tconsecutive datapoints are {stride} timsteps apart -> window_stride')
+if limit > 0:
+  print(f'\tand there cannot be more than {limit} consecutive timsteps -> window_limit')
 else :
-  print('\tand no limit on consecutive frames -> window_limit')
+  print('\tand no limit on consecutive timsteps -> window_limit')
 
 
 #-------------------------------------------------------------------------------
 # visualize
 
-# when stride is lower than window size, it is still possible to visualize consecutive frames
-# by setting frame_range lower than window size
+# when stride is lower than window size, it is still possible to visualize consecutive timsteps
+# by setting timestep_range lower than window size
 # this is handy when we want to visually check dataset entries
 
 datapoints = u[datapoint_index:datapoint_index+num_of_datapoints, ...]
 for d_n in range(0, num_of_datapoints):
-    for f_n in range(0, frame_range):
-        print(f'datapoint {d_n}, frame {f_n}')
-        plotDomain(datapoints[d_n, ..., f_n])
+    for t_n in range(0, timestep_range):
+        print(f'datapoint {datapoint_index+d_n}, timstep {t_n} (max: {datapoints[d_n, ..., t_n].max()})')
+        plotDomain(datapoints[d_n, ..., t_n])
 
 

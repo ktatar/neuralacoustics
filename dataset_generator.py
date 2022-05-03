@@ -53,7 +53,7 @@ else:
 
 
 # dataset size
-N = config['dataset_generation'].getint('N') # num of dataset entries
+N = config['dataset_generation'].getint('N') # num of dataset points
 B = config['dataset_generation'].getint('B') # batch size
 
 # domain size
@@ -132,21 +132,29 @@ if dryrun == 0:
 
 
   #-------------------------------------------------------------------------------
-  # compute meta data, e.g., duration, actual size...
+  # load model and compute meta data, e.g., duration, actual size...
+
+  nn = model.load(model_name_, model_config_path, w, h)
+  # if this is a grid model...
+  if nn != None:
+    N = nn # ...we ignore the requested data point num and use the one built into the model [i.e., number of grid inputs]
+    N += nn%B # we also round it up to the closest multiple of batch size, because this is what the model will do, 
+    # it will add silence for all the simulations that exceed the number of grid inputs defined in the model's ini file
   
   time_duration = nsteps/samplerate 
   print('simulation duration: ', time_duration, 's')
 
   # num of chunks must be lower than total number of batches
   if ch > N//B:
-    ch = (N//B)//2 # a chunk every other batch
-  if ch == 0:
+    ch = (N//B)//2 # otherwise, a chunk every other batch
+  if ch == 0: # always at least one chunk!
     ch = 1
 
   
   # it is possible that not all requested points are generated,
   # depending on ratio with requested batch size
   # this is why we calculate the actual_size of the dataset once saved
+  # this is not true for grid-based models [they return have fixed numbers of points that takes batch size into account]
   n_cnt=0
   num_of_batches = N//B
   batches_per_ch = num_of_batches//ch
@@ -176,14 +184,14 @@ if dryrun == 0:
   t1 = default_timer()
 
   # initial conditions
-  #a = torch.zeros(ch_size, h, w)
+  #a = torch.zeros(ch_size, h, w) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
   # solutions
   u = torch.zeros(ch_size, h, w, nsteps+1) # +1 becase initial condition is saved at beginning of solution time series!
 
 
   for b in range(num_of_batches):
     # compute all steps in full batch
-    sol, sol_t = model.run(dev, 1/samplerate, nsteps, B, w, h, model_name_, model_config_path)
+    sol, sol_t = model.run(dev, 1/samplerate, nsteps, B)
     
     # store
     u[n_cnt:(n_cnt+B),...] = sol # results
@@ -303,11 +311,9 @@ if dryrun == 0:
 else:
   # or generate 1 data entry and visualize it
 
+  model.load(model_name_, model_config_path, w, h)
+
   disp_rate = 1/1
-  b=1 # 1 entry batch
+  b = 1 # 1 entry batch
 
-  sol, _ = model.run(dev, 1/samplerate, nsteps, b, w, h, model_name_, model_config_path, True, disp_rate)
-
-
-#VIC 
-# pass device from ini file
+  sol, _ = model.run(dev, 1/samplerate, nsteps, b, True, disp_rate)

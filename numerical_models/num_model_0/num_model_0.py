@@ -2,10 +2,28 @@ import torch
 import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
 
-solver = 0 # where to load module
+# to store values from load()
+solver = 0 # where to load solver
+modelName = ''
+w = -1
+h = -1
+mu = -1
+rho = -1
+gamma = -1
 
-def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=1):
-    global solver # to prevent python from declaring solver as new local variable when used in this function
+
+def load(model_name, config_path, _w, _h):
+    # to prevent python from declaring new local variables with the same names
+    # only needed when content of variables is modfied
+    global solver 
+    global modelName
+    global w
+    global h
+    global mu
+    global rho
+    global gamma
+
+    modelName = model_name
 
     # get config file
     config = configparser.ConfigParser(allow_no_value=True)
@@ -14,9 +32,14 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
         with open(config_path) as f:
             config.read_file(f)
     except IOError:
-        print(f'{model_name}: Config file not found --- \'{config_path}\'')
+        print(f'{modelName}: Config file not found --- \'{config_path}\'')
         quit()
+    
+    w = _w
+    h = _h
 
+
+    #--------------------------------------------------------------
 
     # read from config file
     # solver
@@ -31,45 +54,11 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
 
 
     #--------------------------------------------------------------
-    # set parameters
 
-    # propagation params, explained in solver
-    # potentially model can have different values across domain
-    mu = torch.ones(b, h, w) * mu
-    rho = torch.ones(b, h, w) * rho
-    gamma = torch.ones(b, h, w) * gamma
-
-    # boundaries
-    # if not specified, default boundary frame
-    # yet, potentially model can have boundaries all over the domain, other than default boundary frame
-    # like this:
-    #bounds = torch.zeros(b, h, w)
-    #bounds[:,h//2,:] = 1
-
-    # initial condition
+    # for determinism of initial conditions
     torch.manual_seed(seed)
     torch.use_deterministic_algorithms(True)
-    xi0 = torch.randn(b, h-2, w-2) # -2 to leave boundary frame alone
 
-    # examples of other initial conditions
-    #xi0 = torch.zeros(b, h-2, w-2)
-    #excitation_x = (w-2)//2
-    #excitation_y = (h-2)//2
-    #xi0[:, excitation_y, excitation_x] = 1
-
-    excite = torch.zeros(b, h-2, w-2, nsteps+1) # nsteps+1 is the total duration of simulation -> initial condition+requested steps
-    # initial condition is first excitation
-    excite[..., 0] = xi0[...]
-
-    # example of continuous excitation
-    # import math 
-    # freq = 6000
-    # ex = torch.FloatTensor([math.sin(2*math.pi*n*freq*dt) for n in range(nsteps+1)]).reshape(1,nsteps+1).repeat([b,1])
-    # excite = torch.zeros(b, h-2, w-2, nsteps+1) # nsteps+1 is the total duration of simulation -> initial condition+requested steps
-    # excite[:, 10, 10, :] = ex[...] # 
-
-
-    
 
     #--------------------------------------------------------------
 
@@ -84,17 +73,59 @@ def run(dev, dt, nsteps, b, w, h, model_name, config_path, disp=False, dispRate=
     # load
     solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
 
+    return
+
+
+def run(dev, dt, nsteps, b, disp=False, dispRate=1):
+    
+    # set parameters
+
+    # propagation params, explained in solver
+    # potentially model can have different values across domain
+    _mu = torch.ones(b, h, w) * mu
+    _rho = torch.ones(b, h, w) * rho
+    _gamma = torch.ones(b, h, w) * gamma
+
+    # boundaries
+    # if not specified, default boundary frame
+    # yet, potentially model can have boundaries all over the domain, other than default boundary frame
+    # like this:
+    #bounds = torch.zeros(b, h, w)
+    #bounds[:,h//2,:] = 1
+
     
     #--------------------------------------------------------------
+    # initial condition
+    xi0 = torch.randn(b, h-2, w-2) # -2 to leave boundary frame alone
+
+    # examples of other initial conditions
+    #xi0 = torch.zeros(b, h-2, w-2)
+    #excitation_x = (w-2)//2
+    #excitation_y = (h-2)//2
+    #xi0[:, excitation_y, excitation_x] = 1
+
+    excite = torch.zeros(b, h-2, w-2, nsteps)
+    # initial condition is first excitation
+    excite[..., 0] = xi0[...]
+
+    # example of continuous excitation
+    # import math 
+    # freq = 6000
+    # ex = torch.FloatTensor([math.sin(2*math.pi*n*freq*dt) for n in range(nsteps+1)]).reshape(1,nsteps+1).repeat([b,1])
+    # excite = torch.zeros(b, h-2, w-2, nsteps) 
+    # excite[:, 10, 10, :] = ex[...]  
+  
+
+    #--------------------------------------------------------------
     # run solver
-    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, torch.empty(0, 1), disp, dispRate)
+    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate)
 
     return [sol, sol_t]
 
 
 def getSolverInfo():
     if solver == 0:
-        print(f'{model_name}: Cannot get description of solver! Model needs to be run at least once')
+        print(f'{modelName}: Cannot get description of solver! Model needs to be run at least once')
         return {'description':  ''}
     return solver.getInfo()
     
