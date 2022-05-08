@@ -1,38 +1,20 @@
 import torch
-import configparser, argparse # to read config from ini file
+import configparser # to save config in new ini file
 import scipy.io # to save dataset
 from pathlib import Path # to properly handle paths and folders on every os
 from timeit import default_timer # to measure processing time
-
+from neuralacoustics.utils import getProjectRoot
+from neuralacoustics.utils import getConfigParser
 
 # retrieve PRJ_ROOT
-prj_root = Path(__file__).absolute() # path of this script, which is in PRJ_ROOT
-prj_root = prj_root.relative_to(Path.cwd()) # path of this script, relative to the current working directory, i.e, from where the script was called 
-prj_root = str(prj_root.parent) # dir of this script, relative to working dir (i.e, PRJ_ROOT)
-
+prj_root = getProjectRoot(__file__)
 
 #-------------------------------------------------------------------------------
 # simulation parameters
 
-# Parse command line arguments
-parser = argparse.ArgumentParser()
-default_config = str(Path(prj_root).joinpath('default.ini'))
-parser.add_argument('--config', type=str, default =default_config , help='path of config file')
-args = parser.parse_args()
+# get config file
+config = getConfigParser(prj_root, __file__.replace('.py', ''))
 
-# Get config file
-config_path = args.config
-config = configparser.ConfigParser(allow_no_value=True)
-
-try:
-  with open(config_path) as f:
-      config.read_file(f)
-except IOError:
-    print(f'dataset_generator: Config file not found --- \'{config_path}\'')
-    quit()
-
-
-#-------------------------------------------------------------------------------
 # read params from config file
 
 # model
@@ -93,12 +75,14 @@ for pkg in range(1,len(model_path_folders)):
 # load 
 model = __import__(packages_struct + '.' + model_name_, fromlist=['*']) # model.path.model_name_ is model script [i.e., package]
 
-# in case of generic gpu, check if available
-if dev == 'gpu':
+# in case of generic gpu or cuda explicitly, check if available
+if dev == 'gpu' or 'cuda' in dev:
   if torch.cuda.is_available():  
-    dev = 'cuda:0'
+    dev = torch.device('cuda')
+    #print(torch.cuda.current_device())
+    #print(torch.cuda.get_device_name(torch.cuda.current_device()))
   else:  
-    dev = 'cpu'
+    dev = torch.device('cpu')
     print('dataset_generator: gpu not avaialable!')
 
 print('Device:', dev)
@@ -129,7 +113,8 @@ if dryrun == 0:
   dataset_name = 'dataset_'+DATASET_INDEX
   dataset_dir = dataset_root.joinpath(dataset_name)
 
-
+  # create folder where to save dataset
+  dataset_dir.mkdir(parents=True, exist_ok=True)
 
   #-------------------------------------------------------------------------------
   # load model and compute meta data, e.g., duration, actual size...
@@ -161,10 +146,6 @@ if dryrun == 0:
   ch_size = batches_per_ch * B # num of data points per chunk
   ch_cnt = 0
   rem = 0 # is there any remainder?
-
-  # create folder where to save dataset
-  dataset_dir.mkdir(parents=True, exist_ok=True)
-
 
   # compute number of leading zeros for pretty file names
   ch_num = str(ch)

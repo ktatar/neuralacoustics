@@ -2,13 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import operator
-from functools import reduce
 
 import numpy as np
 #VIC this is the content of: https://github.com/zongyi-li/fourier_neural_operator/blob/master/fourier_2d_time.py
-# it needs to be updated!
-# i made a small modification to the original code, please try to preserve it when updating it
-# the mod is highlighted by the following text #VIC-mod
+# i made a small modification to the original code, highlighted by the following comment: #VIC-mod
 
 ################################################################
 # fourier layer
@@ -52,9 +49,9 @@ class SpectralConv2d_fast(nn.Module):
         x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1)))
         return x
 
-class SimpleBlock2d(nn.Module):
+class FNO2d(nn.Module):
     def __init__(self, modes1, modes2, width, t_in):
-        super(SimpleBlock2d, self).__init__()
+        super(FNO2d, self).__init__()
 
         """
         The overall network. It contains 4 layers of the Fourier layer.
@@ -63,8 +60,8 @@ class SimpleBlock2d(nn.Module):
             W defined by self.w; K defined by self.conv .
         3. Project from the channel space to the output space by self.fc1 and self.fc2 .
         
-        input: the solution of the previous 10 timesteps + 2 locations (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
-        input shape: (batchsize, x=64, y=64, c=12)
+        input: the solution of the previous t_in timesteps + 2 locations (u(t-t_in, x, y), ..., u(t-1, x, y),  x, y)
+        input shape: (batchsize, x=64, y=64, c=t_in+2)
         output: the solution of the next timestep
         output shape: (batchsize, x=64, y=64, c=1)
         """
@@ -72,22 +69,21 @@ class SimpleBlock2d(nn.Module):
         self.modes1 = modes1
         self.modes2 = modes2
         self.width = width
-        #self.fc0 = nn.Linear(12, self.width)
-        # input channel is 12: the solution of the previous 10 timesteps + 2 locations (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
+        self.padding = 2 # pad the domain if input is non-periodic
         
         #VIC-mod t_in is passed as parameter now, so that we can decide the number of input time steps
+        #self.fc0 = nn.Linear(12, self.width)
         self.fc0 = nn.Linear(t_in+2, self.width)
-        # input channel: the solution of the previous t_in timesteps + 2 locations (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
-
+        # input channel is 12: the solution of the previous t_in timesteps + 2 locations (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
 
         self.conv0 = SpectralConv2d_fast(self.width, self.width, self.modes1, self.modes2)
         self.conv1 = SpectralConv2d_fast(self.width, self.width, self.modes1, self.modes2)
         self.conv2 = SpectralConv2d_fast(self.width, self.width, self.modes1, self.modes2)
         self.conv3 = SpectralConv2d_fast(self.width, self.width, self.modes1, self.modes2)
-        self.w0 = nn.Conv1d(self.width, self.width, 1)
-        self.w1 = nn.Conv1d(self.width, self.width, 1)
-        self.w2 = nn.Conv1d(self.width, self.width, 1)
-        self.w3 = nn.Conv1d(self.width, self.width, 1)
+        self.w0 = nn.Conv2d(self.width, self.width, 1)
+        self.w1 = nn.Conv2d(self.width, self.width, 1)
+        self.w2 = nn.Conv2d(self.width, self.width, 1)
+        self.w3 = nn.Conv2d(self.width, self.width, 1)
         self.bn0 = torch.nn.BatchNorm2d(self.width)
         self.bn1 = torch.nn.BatchNorm2d(self.width)
         self.bn2 = torch.nn.BatchNorm2d(self.width)
@@ -97,62 +93,42 @@ class SimpleBlock2d(nn.Module):
         self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x):
-        batchsize = x.shape[0]
-        size_x, size_y = x.shape[1], x.shape[2]
-
-        grid = self.get_grid(batchsize, size_x, size_y, x.device)
+        grid = self.get_grid(x.shape, x.device)
         x = torch.cat((x, grid), dim=-1)
         x = self.fc0(x)
         x = x.permute(0, 3, 1, 2)
+        # x = F.pad(x, [0,self.padding, 0,self.padding]) # pad the domain if input is non-periodic
 
         x1 = self.conv0(x)
-        x2 = self.w0(x.view(batchsize, self.width, -1)).view(batchsize, self.width, size_x, size_y)
-        x = self.bn0(x1 + x2)
-        x = F.relu(x)
-        x1 = self.conv1(x)
-        x2 = self.w1(x.view(batchsize, self.width, -1)).view(batchsize, self.width, size_x, size_y)
-        x = self.bn1(x1 + x2)
-        x = F.relu(x)
-        x1 = self.conv2(x)
-        x2 = self.w2(x.view(batchsize, self.width, -1)).view(batchsize, self.width, size_x, size_y)
-        x = self.bn2(x1 + x2)
-        x = F.relu(x)
-        x1 = self.conv3(x)
-        x2 = self.w3(x.view(batchsize, self.width, -1)).view(batchsize, self.width, size_x, size_y)
-        x = self.bn3(x1 + x2)
+        x2 = self.w0(x)
+        x = x1 + x2
+        x = F.gelu(x)
 
+        x1 = self.conv1(x)
+        x2 = self.w1(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv2(x)
+        x2 = self.w2(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv3(x)
+        x2 = self.w3(x)
+        x = x1 + x2
+
+        # x = x[..., :-self.padding, :-self.padding] # pad the domain if input is non-periodic
         x = x.permute(0, 2, 3, 1)
         x = self.fc1(x)
-        x = F.relu(x)
+        x = F.gelu(x)
         x = self.fc2(x)
         return x
 
-    def get_grid(self, batchsize, size_x, size_y, device):
+    def get_grid(self, shape, device):
+        batchsize, size_x, size_y = shape[0], shape[1], shape[2]
         gridx = torch.tensor(np.linspace(0, 1, size_x), dtype=torch.float)
         gridx = gridx.reshape(1, size_x, 1, 1).repeat([batchsize, 1, size_y, 1])
         gridy = torch.tensor(np.linspace(0, 1, size_y), dtype=torch.float)
         gridy = gridy.reshape(1, 1, size_y, 1).repeat([batchsize, size_x, 1, 1])
         return torch.cat((gridx, gridy), dim=-1).to(device)
-
-class Net2d(nn.Module):
-    def __init__(self, modes, width, t_in):
-        super(Net2d, self).__init__()
-
-        """
-        A wrapper function
-        """
-
-        self.conv1 = SimpleBlock2d(modes, modes, width, t_in)
-
-
-    def forward(self, x):
-        x = self.conv1(x)
-        return x
-
-
-    def count_params(self):
-        c = 0
-        for p in self.parameters():
-            c += reduce(operator.mul, list(p.size()))
-
-        return c

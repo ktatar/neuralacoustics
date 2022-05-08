@@ -71,15 +71,17 @@ def load(model_name, config_path, _w, _h):
     rho = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; defined as rho = [v*ds/dt)]^2, with v=speed of wave in medium, ds=size of each grid point [same on x and y] and dt=1/samplerate
     gamma = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
 
-    mag_min = config['numerical_model_parameters'].getfloat('mag_min') #
-    mag_max = config['numerical_model_parameters'].getfloat('mag_max') # 
-    mag_step = config['numerical_model_parameters'].getfloat('mag_step') # 
+    # grid parameters -> grid refers to how parameters are sampled between a min and a max
+    mag_min = config['numerical_model_parameters'].getfloat('mag_min') # minimum magnitude in the grid
+    mag_max = config['numerical_model_parameters'].getfloat('mag_max') # maximum magnitude in the grid
+    mag_step = config['numerical_model_parameters'].getfloat('mag_step') # step between consectutive magnitudes in grid
 
-    phase_min = config['numerical_model_parameters'].getfloat('phase_min') #
-    phase_max = config['numerical_model_parameters'].getfloat('phase_max') # 
-    phase_step = config['numerical_model_parameters'].getfloat('phase_step') # 
+    # phase is normalized
+    phase_min = config['numerical_model_parameters'].getfloat('phase_min') # minimum phase in the grid
+    phase_max = config['numerical_model_parameters'].getfloat('phase_max') # maximum phase in the grid
+    phase_step = config['numerical_model_parameters'].getfloat('phase_step') # step between consectutive phases in grid
 
-    bin_min = config['numerical_model_parameters'].getint('bin_min') # 
+    bin_min = config['numerical_model_parameters'].getint('bin_min') # index of starting [minimum spatial freq], then grid will span full width of frequency domain
 
 
     #--------------------------------------------------------------
@@ -200,9 +202,12 @@ def run(dev, dt, nsteps, b, disp=False, dispRate=1):
     # they represent chuncks of periodic wave and, much like the case of wavetables in synths, their extremes cannot have the same value
     # they actually are a time-step off, generating perfect periodic continuity
 
-    # force normalization to current magnitude value
+    # force normalization of current magnitude value -> needed because we are not taking into account number of bins
+    # when turning mag/phase polar coordinates to cartesian Re/Im coordinates
     # element-wise multiplication to tensor slice adapted from here: https://stackoverflow.com/questions/53987906/how-to-multiply-a-tensor-row-wise-by-a-vector-in-pytorch
     xi0 = ex_input_mag[:, None, None] * xi0 / xi0.amax(dim=(1, 2))[:, None, None]
+    # notice that despite the initial condition being normalized to the chosen mag value, the maximum displacement during the time simulation
+    # will likely go above that due to constructive interference with reflected waves
 
     excite = torch.zeros(b, h-2, w-2, nsteps) 
     # initial condition is first excitation
