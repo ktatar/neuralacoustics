@@ -1,41 +1,21 @@
-#VIC put here all the new imports that may be needed
-
-import numpy as np
-import scipy.io
-import h5py
-import sklearn.metrics
-from scipy.ndimage import gaussian_filter
-
 import torch
-import torch.nn as nn
-
-import matplotlib.pyplot as plt
-
 from timeit import default_timer
-
-from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch 1.8]
-
-import os, sys, configparser
+import configparser
 from pathlib import Path
 
-from neuralacoustics.utils import LpLoss
 from neuralacoustics.model import FNO2d
 from neuralacoustics.dataset_loader import loadDataset # to load dataset
+from neuralacoustics.utils import LpLoss
+from neuralacoustics.utils import seed_worker # for PyTorch DataLoader determinism
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import count_params
+from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
 
+from torch.utils.tensorboard import SummaryWriter
 
 # retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
-
-#VIC check this
-# KIVANC: We should check determinism on pytorch. There is a full article about it, 
-# and there is a way to force pytorch to be strictly deterministic:
-# https://pytorch.org/docs/stable/notes/randomness.html
-# If we go this way, we should avoid any numpy ops, and use torch ops at all times. 
-torch.manual_seed(0)
-np.random.seed(0)
 
 
 #-------------------------------------------------------------------------------
@@ -50,8 +30,8 @@ config = getConfigParser(prj_root, __file__.replace('.py', ''))
 # dataset name
 dataset_name = config['training'].get('dataset_name')
 # dataset dir
-dataset_dir = config['training'].get('dataset_dir')
-dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
+dataset_dir_ = config['training'].get('dataset_dir') # keep original string for log
+dataset_dir = dataset_dir_.replace('PRJ_ROOT', prj_root)
 
 # number of data points to load, i.e., specific sub-series of time steps within data entries
 n_train = config['training'].getint('n_train')
@@ -92,8 +72,9 @@ model_root = config['training'].get('model_dir')
 model_root = model_root.replace('PRJ_ROOT', prj_root)
 model_root = Path(model_root)
 
-dev = config['training'].get('dev')
+seed = config['training'].getint('seed')
 
+dev = config['training'].get('dev')
 
 print('Model and training parameters:')
 print(f'\tdataset name: {dataset_name}')
@@ -103,10 +84,23 @@ print(f'\tinput steps: {T_in}')
 print(f'\toutput steps: {T_out}')
 print(f'\tmodes: {modes}')
 print(f'\twidth: {width}')
+print(f'\tepochs: {epochs}')
 print(f'\tlearning_rate: {learning_rate}')
 print(f'\tscheduler_step: {scheduler_step}')
 print(f'\tscheduler_gamma: {scheduler_gamma}')
+print(f'\trandom seed: {seed}')
 
+
+#-------------------------------------------------------------------------------
+# determinism
+# https://pytorch.org/docs/stable/notes/randomness.html
+torch.use_deterministic_algorithms(True) # generic
+torch.backends.cudnn.deterministic = True #VIC probably this should be called only in those models that use it
+
+# needed for DataLoader 
+torch.manual_seed(seed) # check seed_worker() in utils.py
+g = torch.Generator()
+g.manual_seed(seed)
 
 #-------------------------------------------------------------------------------
 # compute name of model
@@ -128,14 +122,27 @@ while name_clash:
       MODEL_INDEX = str(int(MODEL_INDEX)+1) # increase index
 
 model_name = 'model_'+MODEL_INDEX
-model_dir = model_root.joinpath(model_name)
+model_dir = model_root.joinpath(model_name) # the directory contains an extra folder with same name of model, that will include both model and log file
 
-  # create folder where to save model
+# create folder where to save model and log file
 model_dir.mkdir(parents=True, exist_ok=True)
+
+model_path = model_dir.joinpath(model_name)
+
+# log
+# txt file
+f = open(str(model_path)+'.log', 'w')
+# tensorboard
+writer = SummaryWriter(str(model_dir)+'/tensorboard')
+# to view: 
+# from tensordboard model dir
+# run: tensorboard --logdir=. 
+# then open/click on http://localhost:6006/
 
 
 #-------------------------------------------------------------------------------
 # retrieve all data points
+print() # a new line   
 
 t1 = default_timer()
 
@@ -159,19 +166,26 @@ assert(T_out == train_u.shape[-1])
 train_a = train_a.reshape(n_train,S,S,T_in)
 test_a = test_a.reshape(n_test,S,S,T_in)
 
+num_workers = 1 # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
+
 # datapoints will be loaded from these
-train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u), batch_size=batch_size, shuffle=False)
+train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True, 
+num_workers=num_workers, worker_init_fn=seed_worker, generator=g)
+test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u), batch_size=batch_size, shuffle=False, 
+num_workers=num_workers, worker_init_fn=seed_worker, generator=g) #VIC not sure if seed_worker and generator needed here, even multi-process calls
+# because there is no shuffle
 
 t2 = default_timer()
 
-print(f'\nPreprocessing finished, time used: {t2-t1}s')
+print(f'\nDataset preprocessing finished, time used: {t2-t1}s')
 print(f'Training input shape: {train_a.shape}, output shape: {train_u.shape}')    
 
 
 
 #-------------------------------------------------------------------------------
 # select device and create model
+print(f'\nModel name: {model_name}')
+
 
 # in case of generic gpu or cuda explicitly, check if available
 if dev == 'gpu' or 'cuda' in dev:
@@ -187,7 +201,7 @@ else:
 print('Device:', dev)
 
 
-print(f'Model parameters number: {count_params(model)}')
+print(f'Nunmber of model\'s parameters: {count_params(model)}')
 optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
 
@@ -195,6 +209,7 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step,
 #-------------------------------------------------------------------------------
 # train!
 
+print('\n___Start training!___')
 #VIC test
 # train_features, train_labels = next(iter(train_loader))
 # print(train_features.size())
@@ -205,8 +220,13 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step,
 # print(f'\nInference finished, time used: {t2-t1}s')
 # quit()
 
+# log and print headers
+# not using same string due to formatting errors
+log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test'
+f.write(log_str)
+print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test')
+
 myloss = LpLoss(size_average=False)
-step = 1
 for ep in range(epochs):
     model.train()
     t1 = default_timer()
@@ -218,8 +238,8 @@ for ep in range(epochs):
         yy = yy.to(dev)
 
         # model outputs 1 timestep at a time [i.e., labels], so we iterate over T_out steps to compute loss
-        for t in range(0, T_out, step):
-            y = yy[..., t:t + step]
+        for t in range(0, T_out):
+            y = yy[..., t:t+1]
             im = model(xx)
             loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
@@ -228,16 +248,20 @@ for ep in range(epochs):
             else:
                 pred = torch.cat((pred, im), -1)
 
-            xx = torch.cat((xx[..., step:], im), dim=-1)
+            xx = torch.cat((xx[..., 1:], im), dim=-1)
 
         train_l2_step += loss.item()
         l2_full = myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
         train_l2_full += l2_full.item()
+        #VIC not sure why not simply train_l2_full += myloss(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
+
+
+    # test
     test_l2_step = 0
     test_l2_full = 0
     with torch.no_grad():
@@ -246,8 +270,8 @@ for ep in range(epochs):
             xx = xx.to(dev)
             yy = yy.to(dev)
 
-            for t in range(0, T_out, step):
-                y = yy[..., t:t + step]
+            for t in range(0, T_out):
+                y = yy[..., t:t+1]
                 im = model(xx)
                 loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
@@ -256,29 +280,76 @@ for ep in range(epochs):
                 else:
                     pred = torch.cat((pred, im), -1)
 
-                xx = torch.cat((xx[..., step:], im), dim=-1)
+                xx = torch.cat((xx[..., 1:], im), dim=-1)
 
             test_l2_step += loss.item()
             test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
 
     t2 = default_timer()
     scheduler.step()
-    print(ep, t2 - t1, train_l2_step / n_train / (T_out / step), train_l2_full / n_train, test_l2_step / n_test / (T_out / step),
-          test_l2_full / n_test)
-    
-# add loss to name, with 4 decimals    
-# final_training_loss = '{:.4f}'.format(test_l2_full / n_test)
-# final_training_loss = final_training_loss.replace('.', '@')
 
-# model_name = model_name+'_loss'+final_training_loss   
-# model_full_path = model_path.joinpath(model_name)
+    # tensorboard log
+    epoch_train_loss_step =  train_l2_step / n_train / T_out
+    epoch_train_loss_full =  train_l2_full / n_train
+
+    epoch_test_loss_step =  test_l2_step / n_train / T_out
+    epoch_test_loss_full =  test_l2_full / n_train
+
+    writer.add_scalar("Loss Step/train", epoch_train_loss_step, ep)
+    writer.add_scalar("Loss Full/train", epoch_train_loss_full, ep)
+
+    writer.add_scalar("Loss Step/test", epoch_test_loss_step, ep)
+    writer.add_scalar("Loss Full/test", epoch_test_loss_full, ep)
+
+    # log and print
+    # not using same string due to formatting errors
+    f.write('\n')
+    log_str = '{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}'.format(ep, t2-t1, epoch_train_loss_step, epoch_train_loss_full, epoch_test_loss_step, epoch_test_loss_full)
+    f.write(log_str)
+    print(f'{ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
+
+f.close()
+#writer.flush()
+writer.close()
+
+# final loss with 4 decimals    
+final_train_loss = '{:.4f}'.format(epoch_train_loss_full)
+final_test_loss = '{:.4f}'.format(epoch_test_loss_full)
+
+print('___Training done!___')
+
+
+#-------------------------------------------------------------------------------
 
 # save model to folder
-model_path = model_dir.joinpath(model_name)
 torch.save(model, model_path)
 
-# # save config file #TODO save only relevant bits + results
-# config_path = model_path.joinpath(model_name+'_config.ini')
+print(f'\nModel {model_name} saved in:')
+print('\t', model_dir)
+print(f'final train loss: {final_train_loss}')
+print(f'final test loss: {final_test_loss}')
 
-# with open(config_path, 'w') as configfile:
-#   config.write(configfile)
+
+#-------------------------------------------------------------------------------
+# save model info + training info from used config file into a new model config file (log)
+
+# create empty config file for model 
+config_model = configparser.RawConfigParser()
+config_model.optionxform = str # otherwise raw config parser converts all entries to lower case letters
+
+# fill it with model details
+config_model.add_section('model_details')
+config_model.set('model_details', 'name', model_name)
+config_model.set('model_details', 'train_loss', final_train_loss)
+config_model.set('model_details', 'test_loss', final_test_loss)
+
+# then training details, from config file used
+config_model.add_section('training')
+for (each_key, each_val) in config.items('training'):
+      config_model.set('training', each_key, each_val)
+
+# where to write it
+config_path = model_dir.joinpath(model_name +'.ini') # same name as model
+# write
+with open(config_path, 'w') as configfile:
+    config_model.write(configfile)

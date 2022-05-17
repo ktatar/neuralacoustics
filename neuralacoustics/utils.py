@@ -2,6 +2,7 @@ import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
 
 import numpy as np
+import random as rd
 import scipy.io
 import h5py
 import torch
@@ -37,6 +38,16 @@ def getConfigParser(prj_root, file_name):
         quit()
     
     return config
+
+
+# for determinism in torch DataLoader https://pytorch.org/docs/stable/notes/randomness.html
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    rd.seed(worker_seed)
+
+
+
 
 #VIC this is the content of: https://github.com/zongyi-li/fourier_neural_operator/blob/master/utilities3.py
 

@@ -56,8 +56,8 @@ dataset_root = Path(dataset_root)
 
 dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
 
-dev = config['dataset_generation'].get('dev') # cpu or gpu
-
+dev_ = config['dataset_generation'].get('dev') # cpu or gpu, keep original for log
+dev = dev_
 #-------------------------------------------------------------------------------
 
 
@@ -239,8 +239,8 @@ if dryrun == 0:
   config.set('dataset_generation', 'numerical_model', model_name_)
   # the model config file is the current log file
   model_config_path_ = Path(dataset_root_).joinpath(dataset_name) # up to dataset folder, with PRJ_ROOT var
-  dataset_name = dataset_name+'.ini'
-  model_config_path_ = model_config_path_.joinpath(dataset_name) # add file name
+  dataset_config_name = dataset_name+'.ini' # same name as dataset
+  model_config_path_ = model_config_path_.joinpath(dataset_config_name) # add file name
   model_config_path_ = str(model_config_path_)
   config.set('dataset_generation', 'numerical_model_config', model_config_path_)
   config.set('dataset_generation', 'N', N)
@@ -251,37 +251,37 @@ if dryrun == 0:
   config.set('dataset_generation', 'nsteps', nsteps)
   config.set('dataset_generation', 'chunks', ch_cnt)
   config.set('dataset_generation', 'dataset_dir', dataset_root_)
-  config.set('dataset_generation', 'dev', dev)
+  config.set('dataset_generation', 'dev', dev_)
   config.set('dataset_generation', 'dryrun', 0)
 
 
   # then retrieve model and solver details from model config file
-  model_config = configparser.ConfigParser(allow_no_value=True)
+  config_model = configparser.ConfigParser(allow_no_value=True)
 
   try:
       with open(model_config_path) as f:
-        model_config.read(model_config_path)
+        config_model.read(model_config_path)
   except IOError:
       print(f'dataset_generator: Model config file not found --- \'{model_config_path}\'')
-      sys.exit()
+      quit()
 
   # extract relevant bits and add them to new dataset config file
   config.add_section('numerical_model_details')
-  for (each_key, each_val) in model_config.items('numerical_model_details'):
+  for (each_key, each_val) in config_model.items('numerical_model_details'):
       config.set('numerical_model_details', each_key, each_val)
 
   config.add_section('solver')
-  for (each_key, each_val) in model_config.items('solver'):
+  for (each_key, each_val) in config_model.items('solver'):
       config.set('solver', each_key, each_val)
   for (each_key, each_val) in model.getSolverInfo().items():
       config.set('solver', each_key, each_val)
   
   config.add_section('numerical_model_parameters')
-  for (each_key, each_val) in model_config.items('numerical_model_parameters'):
+  for (each_key, each_val) in config_model.items('numerical_model_parameters'):
       config.set('numerical_model_parameters', each_key, each_val)
 
   # where to write it
-  config_path = dataset_dir.joinpath(dataset_name)
+  config_path = dataset_dir.joinpath(dataset_config_name) 
   # write
   with open(config_path, 'w') as configfile:
       config.write(configfile)

@@ -12,8 +12,6 @@ _Install required libraries in environment:
   
     conda install pytorch torchvision torchaudio cpuonly -c pytorch 
   
-    conda install jupyter 
-  
     conda install scikit-learn 
    
     conda install scipy 
@@ -21,6 +19,8 @@ _Install required libraries in environment:
     conda install matplotlib 
   
     conda install h5py 
+    
+    onda install -c conda-forge tensorboard 
     
 (NOTE: missing CUDA installation, this will run code on CPU only)
 
