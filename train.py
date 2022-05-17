@@ -68,8 +68,8 @@ scheduler_gamma = config['training'].getfloat('scheduler_gamma')
 
 
 # misc parameters
-model_root = config['training'].get('model_dir')
-model_root = model_root.replace('PRJ_ROOT', prj_root)
+model_root_ = config['training'].get('model_dir') # keep original for config file
+model_root = model_root_.replace('PRJ_ROOT', prj_root)
 model_root = Path(model_root)
 
 seed = config['training'].getint('seed')
@@ -221,7 +221,7 @@ print('\n___Start training!___')
 # quit()
 
 # log and print headers
-# not using same string due to formatting errors
+# not using same string due to formatting visualization differences
 log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test'
 f.write(log_str)
 print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test')
@@ -302,7 +302,7 @@ for ep in range(epochs):
     writer.add_scalar("Loss Full/test", epoch_test_loss_full, ep)
 
     # log and print
-    # not using same string due to formatting errors
+    # not using same string due to formatting visualization differences
     f.write('\n')
     log_str = '{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}'.format(ep, t2-t1, epoch_train_loss_step, epoch_train_loss_full, epoch_test_loss_step, epoch_test_loss_full)
     f.write(log_str)
@@ -337,19 +337,52 @@ print(f'final test loss: {final_test_loss}')
 config_model = configparser.RawConfigParser()
 config_model.optionxform = str # otherwise raw config parser converts all entries to lower case letters
 
+
+
 # fill it with model details
 config_model.add_section('model_details')
 config_model.set('model_details', 'name', model_name)
 config_model.set('model_details', 'train_loss', final_train_loss)
 config_model.set('model_details', 'test_loss', final_test_loss)
 
+
+
 # then training details, from config file used
 config_model.add_section('training')
-for (each_key, each_val) in config.items('training'):
+for(each_key, each_val) in config.items('training'):
       config_model.set('training', each_key, each_val)
 
+
+
+
+# then retrieve all content of dataset config file
+config = configparser.ConfigParser(allow_no_value=True)
+dataset_dir = Path(dataset_dir)
+dataset_config_path = dataset_dir.joinpath(dataset_name).joinpath(dataset_name+'.ini') 
+try:
+    with open(dataset_config_path) as f:
+        config.read(dataset_config_path)
+except IOError:
+    print(f'train: Dataset config file not found --- \'{dataset_config_path}\'')
+    quit()
+
+for(each_section,_) in config.items():
+    if(each_section != 'DEFAULT'):
+        config_model.add_section(each_section)
+        for(each_key, each_val) in config.items(each_section):
+            if(each_key != 'numerical_model_config'):
+                config_model.set(each_section, each_key, each_val)
+            else:
+                # currrent config file [same name as model and in same dir], but expressed with original root, that may contain PRJ_ROOT     
+                config_path = Path(model_root_).joinpath(model_name).joinpath(model_name +'.ini') # maintains PRJ_ROOT var [if used]
+                config_path = str(config_path)
+                config_model.set(each_section, each_key, config_path)
+                # by doing so, dataset too can be re-built using this config file
+
+
+
 # where to write it
-config_path = model_dir.joinpath(model_name +'.ini') # same name as model
+config_path = model_dir.joinpath(model_name +'.ini') # same name as model and in same dir
 # write
 with open(config_path, 'w') as configfile:
     config_model.write(configfile)

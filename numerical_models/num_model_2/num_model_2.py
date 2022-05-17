@@ -161,14 +161,16 @@ def run(dev, dt, nsteps, b, disp=False, dispRate=1):
         ex_input_phase[:] = input_grid[current_input:current_input+b, 2]*2*math.pi
     else:
         # fill a partial batch, with as many inputs as we have left
-        ex_input_freq[:] = input_grid[current_input:, 0]
-        ex_input_mag[:] = input_grid[current_input:, 1]
-        ex_input_phase[:] = input_grid[current_input:, 2]*2*math.pi
-        # once we have exhausted all the possible inputs, we fill the remainder with silence
         grid_len = len(input_grid)
-        ex_input_freq[grid_len:] = 0
-        ex_input_mag[grid_len:] = 0
-        ex_input_phase[grid_len:] = 0
+        partial_b = grid_len - current_input
+        ex_input_freq[:partial_b] = input_grid[current_input:, 0]
+        ex_input_mag[:partial_b] = input_grid[current_input:, 1]
+        ex_input_phase[:partial_b] = input_grid[current_input:, 2]*2*math.pi
+        # once we have exhausted all the possible inputs, we fill the remainder with silence
+        rem = b-partial_b
+        ex_input_freq[rem:] = 0
+        ex_input_mag[rem:] = 0
+        ex_input_phase[rem:] = 0
 
     # advance for next call
     current_input += b

@@ -18,7 +18,7 @@ config = getConfigParser(prj_root, __file__.replace('.py', ''))
 # read params from config file
 
 # model
-model_root_ = config['dataset_generation'].get('numerical_model_dir') # keep original string for log
+model_root_ = config['dataset_generation'].get('numerical_model_dir') # keep original string for dataset config
 model_root = model_root_.replace('PRJ_ROOT', prj_root)
 model_root = Path(model_root)
 model_name_ = config['dataset_generation'].get('numerical_model')
@@ -50,13 +50,13 @@ samplerate = config['dataset_generation'].getint('samplerate'); # Hz, probably n
 ch = config['dataset_generation'].getint('chunks') # num of chunks
 
 # dataset dir
-dataset_root_ = config['dataset_generation'].get('dataset_dir') # keep original string for log
+dataset_root_ = config['dataset_generation'].get('dataset_dir') # keep original string for dataset config
 dataset_root = dataset_root_.replace('PRJ_ROOT', prj_root)
 dataset_root = Path(dataset_root)
 
 dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
 
-dev_ = config['dataset_generation'].get('dev') # cpu or gpu, keep original for log
+dev_ = config['dataset_generation'].get('dev') # cpu or gpu, keep original for dataset config
 dev = dev_
 #-------------------------------------------------------------------------------
 
@@ -120,11 +120,18 @@ if dryrun == 0:
   # load model and compute meta data, e.g., duration, actual size...
 
   nn = model.load(model_name_, model_config_path, w, h)
+  n_zeros = 0
   # if this is a grid model...
   if nn != None:
-    N = nn # ...we ignore the requested data point num and use the one built into the model [i.e., number of grid inputs]
-    N += nn%B # we also round it up to the closest multiple of batch size, because this is what the model will do, 
-    # it will add silence for all the simulations that exceed the number of grid inputs defined in the model's ini file
+    # ...we ignore the requested data point num and use the one built into the model [i.e., number of grid inputs]
+    if nn%B > 0:
+      # if num of data poins is not an integer multiple of batch size
+      N = B * (1 + nn//B) # we round it up to the closest multiple of batch size, because this is what the model will do, 
+      # it will add silence for all the simulations that exceed the number of grid inputs defined in the model's ini file
+      n_zeros = N-nn # we save the number of zero data points that are addeded at the end of dataset
+    else:
+      # otherwise, no need to round up
+      N = nn
   
   time_duration = nsteps/samplerate 
   print('simulation duration: ', time_duration, 's')
@@ -233,11 +240,14 @@ if dryrun == 0:
   config.set('dataset_details', 'simulation_duration_s', simulation_duration)
   config.set('dataset_details', 'chunk_size', ch_size)
   config.set('dataset_details', 'remainder_size', rem_size)
+  if n_zeros > 0:
+    config.set('dataset_details', 'final_zero_N', n_zeros)
 
   config.add_section('dataset_generation')
   config.set('dataset_generation', 'numerical_model_dir', model_root_)
   config.set('dataset_generation', 'numerical_model', model_name_)
-  # the model config file is the current log file
+  # the model config file is the current config file
+  # by doing so, dataset too can be re-built using this config file
   model_config_path_ = Path(dataset_root_).joinpath(dataset_name) # up to dataset folder, with PRJ_ROOT var
   dataset_config_name = dataset_name+'.ini' # same name as dataset
   model_config_path_ = model_config_path_.joinpath(dataset_config_name) # add file name
@@ -267,17 +277,17 @@ if dryrun == 0:
 
   # extract relevant bits and add them to new dataset config file
   config.add_section('numerical_model_details')
-  for (each_key, each_val) in config_model.items('numerical_model_details'):
+  for(each_key, each_val) in config_model.items('numerical_model_details'):
       config.set('numerical_model_details', each_key, each_val)
 
   config.add_section('solver')
-  for (each_key, each_val) in config_model.items('solver'):
+  for(each_key, each_val) in config_model.items('solver'):
       config.set('solver', each_key, each_val)
-  for (each_key, each_val) in model.getSolverInfo().items():
+  for(each_key, each_val) in model.getSolverInfo().items():
       config.set('solver', each_key, each_val)
   
   config.add_section('numerical_model_parameters')
-  for (each_key, each_val) in config_model.items('numerical_model_parameters'):
+  for(each_key, each_val) in config_model.items('numerical_model_parameters'):
       config.set('numerical_model_parameters', each_key, each_val)
 
   # where to write it
