@@ -9,6 +9,7 @@ from neuralacoustics.utils import LpLoss
 from neuralacoustics.utils import seed_worker # for PyTorch DataLoader determinism
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
+from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import count_params
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
 
@@ -22,7 +23,8 @@ prj_root = getProjectRoot(__file__)
 # training parameters
 
 # get config file
-config = getConfigParser(prj_root, __file__.replace('.py', ''))
+config = getConfigParser(prj_root, __file__) # we call this script from command line directly
+# hence __file__ is not a path, just the file name with extension
 
 # read params from config file
 
@@ -44,13 +46,13 @@ T_out = config['training'].getint('T_out')
 
 # offset between consecutive windows
 win_stride = config['training'].getint('window_stride') 
-# by default, windows are juxtaposed
-if win_stride <= 0:
-    win_stride = T_in+T_out
 
 # maximum index of the frame (timestep) that can be retrieved from each dataset entry
 win_limit = config['training'].getint('window_limit') 
 
+# permute dataset entries
+permute = config['training'].getint('permute') 
+permute = bool(permute>0)
 
 # network parameters
 modes = config['training'].getint('network_modes')
@@ -94,11 +96,12 @@ print(f'\trandom seed: {seed}')
 #-------------------------------------------------------------------------------
 # determinism
 # https://pytorch.org/docs/stable/notes/randomness.html
-torch.use_deterministic_algorithms(True) # generic
-torch.backends.cudnn.deterministic = True #VIC probably this should be called only in those models that use it
+# generic
+torch.use_deterministic_algorithms(True) 
+torch.backends.cudnn.deterministic = True 
 
 # needed for DataLoader 
-torch.manual_seed(seed) # check seed_worker() in utils.py
+torch.manual_seed(seed) # for permutation in loadDataset() and  seed_worker() in utils.py
 g = torch.Generator()
 g.manual_seed(seed)
 
@@ -146,14 +149,14 @@ print() # a new line
 
 t1 = default_timer()
 
-u = loadDataset(dataset_name, dataset_dir, n_train+n_test, T_in+T_out, win_stride, win_limit)
+u = loadDataset(dataset_name, dataset_dir, n_train+n_test, T_in+T_out, win_stride, win_limit, permute)
 # get domain size
 sh = list(u.shape)
 S = sh[1] 
 # we assume that all datasets have simulations spanning square domains
 assert(S == sh[2])
 
-# prepare train and and test sets 
+# prepare train and test sets 
 train_a = u[:n_train,:,:,:T_in]
 train_u = u[:n_train,:,:,T_in:T_in+T_out]
 test_a = u[-n_test:,:,:,:T_in]
@@ -327,7 +330,7 @@ torch.save(model, model_path)
 print(f'\nModel {model_name} saved in:')
 print('\t', model_dir)
 print(f'final train loss: {final_train_loss}')
-print(f'final test loss: {final_test_loss}')
+print(f'final test loss: {final_test_loss}\n')
 
 
 #-------------------------------------------------------------------------------
@@ -356,15 +359,10 @@ for(each_key, each_val) in config.items('training'):
 
 
 # then retrieve all content of dataset config file
-config = configparser.ConfigParser(allow_no_value=True)
 dataset_dir = Path(dataset_dir)
 dataset_config_path = dataset_dir.joinpath(dataset_name).joinpath(dataset_name+'.ini') 
-try:
-    with open(dataset_config_path) as f:
-        config.read(dataset_config_path)
-except IOError:
-    print(f'train: Dataset config file not found --- \'{dataset_config_path}\'')
-    quit()
+
+config = openConfig(dataset_config_path, __file__)
 
 for(each_section,_) in config.items():
     if(each_section != 'DEFAULT'):

@@ -2,9 +2,8 @@ import torch
 import configparser, argparse # to read config from ini file
 import math # for pi and floor
 from pathlib import Path # to properly handle paths and folders on every os
+from neuralacoustics.utils import openConfig
 
-
-from neuralacoustics.data_plotter import plotDomain #VIC this needs to go
 
 # to store values from load()
 solver = 0 # where to load solver
@@ -46,14 +45,7 @@ def load(model_name, config_path, _w, _h):
     modelName = model_name
 
     # get config file
-    config = configparser.ConfigParser(allow_no_value=True)
-
-    try:
-        with open(config_path) as f:
-            config.read_file(f)
-    except IOError:
-        print(f'{modelName}: Config file not found --- \'{config_path}\'')
-        quit()
+    config = openConfig(config_path, modelName)
     
     w = _w
     h = _h
@@ -85,7 +77,7 @@ def load(model_name, config_path, _w, _h):
 
 
     #--------------------------------------------------------------
-    # init input grid
+    # init input grid, always deterministic
 
     # prepare input frequencies as mag and phase couples
     mag_num = math.floor((mag_max-mag_min)/mag_step) + 1

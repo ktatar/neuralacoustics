@@ -1,27 +1,22 @@
 import torch
 import configparser
 from pathlib import Path
+from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import MatReader 
 
 
 
-def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0):
+def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, permute=False):
   
   print('Loading dataset:', dataset_name)
 
-  
   #--------------------------------------------------------------
    # get dataset log file (as config file)
-  config = configparser.ConfigParser(allow_no_value=True)
   dataset_dir = Path(dataset_root).joinpath(dataset_name) # dataset_root/dataset_name
   config_path = dataset_dir.joinpath(dataset_name+'.ini') # dataset_root/dataset_name/dataset_name.ini 
 
-  try:
-    with open(config_path) as f:
-        config.read_file(f)
-  except IOError:
-      print(f'dataset_loader: Config file not found --- \'{config_path}\'')
-      quit()
+  config = openConfig(config_path, Path(__file__).name) # this is an auxiliary script, not called directly from command line
+  # so __file__ is a path and we need to retrieve just the file name
 
 
 
@@ -44,13 +39,21 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0):
   #--------------------------------------------------------------
   # data point extraction params
 
+  # by default, each window covers all available timesteps [full simulation time]
+  if(win <= 0):
+    win = T
+
   # by default, windows are juxtaposed
   if stride <= 0:
     stride = win
 
-  # to grab only a subset of timesteps in each data entry
-  if win_lim > 0 and win_lim < T:
-    T = win_lim
+  # win_limit is used to grab only a subset of timesteps in each data entry
+  # by default it is ignored
+  # but if is less than number of all timesteps [full simulation time] and gte window, it is applied
+  if win_lim > 0 and win_lim < T and win_lim >= win:
+    T = win_lim 
+
+
 
 
   # check that window size is smaller than number of timesteps per each data entry
@@ -133,5 +136,10 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0):
         cnt = cnt+1
         if cnt >= n:
           break
+
+  # permute dataset, along first dimension of tensor, i.e., order of time simulations on whole domain [data points]
+  if(permute):
+    u = u[torch.randperm(u.shape[0]),...] # this is needed when using a dataset obtained with a grid approach
+    print(f'\tWith permutation of points')
 
   return u

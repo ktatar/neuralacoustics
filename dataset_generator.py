@@ -5,15 +5,19 @@ from pathlib import Path # to properly handle paths and folders on every os
 from timeit import default_timer # to measure processing time
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
+from neuralacoustics.utils import openConfig
+
 
 # retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
+
 
 #-------------------------------------------------------------------------------
 # simulation parameters
 
 # get config file
-config = getConfigParser(prj_root, __file__.replace('.py', ''))
+config = getConfigParser(prj_root, __file__) # we call this script from command line directly
+# hence __file__ is not a path, just the file name with extension
 
 # read params from config file
 
@@ -58,11 +62,17 @@ dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simu
 
 dev_ = config['dataset_generation'].get('dev') # cpu or gpu, keep original for dataset config
 dev = dev_
+
+
 #-------------------------------------------------------------------------------
+# determinism
+# https://pytorch.org/docs/stable/notes/randomness.html
+# generic
+torch.use_deterministic_algorithms(True) 
+torch.backends.cudnn.deterministic = True 
 
 
-
-
+#-------------------------------------------------------------------------------
 # load model
 # we want to load the package through potential subfolders
 # we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
@@ -220,7 +230,7 @@ if dryrun == 0:
       print(f'plus remainder file with {n_cnt} datapoints')
 
   simulation_duration = t2-t1
-  print(f'\nElapsed time:{simulation_duration} s')
+  print(f'\nElapsed time: {simulation_duration} s\n')
 
 
 
@@ -266,14 +276,7 @@ if dryrun == 0:
 
 
   # then retrieve model and solver details from model config file
-  config_model = configparser.ConfigParser(allow_no_value=True)
-
-  try:
-      with open(model_config_path) as f:
-        config_model.read(model_config_path)
-  except IOError:
-      print(f'dataset_generator: Model config file not found --- \'{model_config_path}\'')
-      quit()
+  config_model = openConfig(model_config_path, __file__)
 
   # extract relevant bits and add them to new dataset config file
   config.add_section('numerical_model_details')

@@ -1,6 +1,7 @@
 import torch
 import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
+from neuralacoustics.utils import openConfig
 
 # to store values from load()
 solver = 0 # where to load solver
@@ -26,15 +27,8 @@ def load(model_name, config_path, _w, _h):
     modelName = model_name
 
     # get config file
-    config = configparser.ConfigParser(allow_no_value=True)
+    config = openConfig(config_path, modelName) 
 
-    try:
-        with open(config_path) as f:
-            config.read_file(f)
-    except IOError:
-        print(f'{modelName}: Config file not found --- \'{config_path}\'')
-        quit()
-    
     w = _w
     h = _h
 
@@ -57,7 +51,9 @@ def load(model_name, config_path, _w, _h):
 
     # for determinism of initial conditions
     torch.manual_seed(seed)
-    torch.use_deterministic_algorithms(True)
+    # these are in dataset_generation.py script
+    #torch.use_deterministic_algorithms(True) 
+    #torch.backends.cudnn.deterministic = True 
 
 
     #--------------------------------------------------------------

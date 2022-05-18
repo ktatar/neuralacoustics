@@ -8,13 +8,17 @@ from neuralacoustics.utils import getConfigParser
 # retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
 
+
 #-------------------------------------------------------------------------------
 # simulation parameters
 
 # get config file
-config = getConfigParser(prj_root, __file__.replace('.py', ''))
+config = getConfigParser(prj_root, __file__) # we call this script from command line directly
+# hence __file__ is not a path, just the file name with extension
 
 # read params from config file
+
+# first how to load dataset
 
 # dataset name
 dataset_name = config['dataset_visualization'].get('dataset_name')
@@ -22,55 +26,69 @@ dataset_name = config['dataset_visualization'].get('dataset_name')
 dataset_dir = config['dataset_visualization'].get('dataset_dir')
 dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
 
-
 # total number of data points to load, i.e., specific sub-series of time steps within data entries
 n = config['dataset_visualization'].getint('n_train') + config['dataset_visualization'].getint('n_test') 
 
 # size of window, i.e., length of each data point
-window = config['dataset_visualization'].getint('window_size') 
+window = config['dataset_visualization'].getint('window_size')
+# zero means all available time steps, it is handled automatically in loadDataset() 
 
 # offset between consecutive windows
 stride = config['dataset_visualization'].getint('window_stride') 
-# by default, windows are juxtaposed
-if stride <= 0:
-    stride = window
+# by default, windows are juxtaposed, so zero means step = window
+# this is done automatically in loadDataset(), but we want to print result here too, so ti will be done again after loadDataset() is called
 
 # maximum index of the frame (timestep) that can be retrieved from each dataset entry
 limit = config['dataset_visualization'].getint('window_limit') 
 
+# permute dataset entries
+permute = config['dataset_visualization'].getint('permute') 
+permute = bool(permute>0)
+
+# then the actual visualization part
 
 # number of datapoints to visualize
 num_of_datapoints = config['dataset_visualization'].getint('num_of_datapoints') 
 # at least one datapoint
 if num_of_datapoints <= 0:
-    timestep_range = 1
+    num_of_datapoints = 1
 
 # index of first datapoint to visualize
 datapoint_index = config['dataset_visualization'].getint('first_datapoint') 
 
 # number of time steps to plot from each visualized datapoint
 timestep_range = config['dataset_visualization'].getint('timestep_range') 
-# zero means all available time steps
-if timestep_range <= 0:
-    timestep_range = window
+# zero means all available time steps, it will be handled later, after loadDataset() is called
 
+
+# misc
+seed = config['dataset_visualization'].getint('seed') 
+# for permutation determinism
+torch.manual_seed(seed)
 
 #-------------------------------------------------------------------------------
 # retrieve all data points
-u = loadDataset(dataset_name, dataset_dir, n, window, stride, limit)
+u = loadDataset(dataset_name, dataset_dir, n, window, stride, limit, permute)
 
 print(u.max())
 
-
 shape = list(u.shape)
+
+# actual values used in loadDataset()
+window = shape[-1]
+if stride <= 0:
+    stride = window
+if timestep_range <= 0:
+    timestep_range = window
+
 print('dataset shape:', shape)
 print(f'\tdataset has {shape[0]} datapoints -> n_train+n_test')
-print(f'\teach composed of {shape[-1]} timsteps -> window_size')
+print(f'\teach composed of {window} timsteps -> window_size')
 print(f'\tconsecutive datapoints are {stride} timesteps apart -> window_stride')
 if limit > 0:
   print(f'\tand there cannot be more than {limit} consecutive timsteps -> window_limit')
 else :
-  print('\tand no limit on consecutive timsteps -> window_limit')
+  print('\tand no limit on consecutive timesteps -> window_limit')
 
 
 #-------------------------------------------------------------------------------

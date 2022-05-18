@@ -19,7 +19,20 @@ def getProjectRoot(file):
     return prj_root
 
 
-def getConfigParser(prj_root, file_name):
+def openConfig(config_path, caller_name):
+    config = configparser.ConfigParser(allow_no_value=True)
+
+    try:
+        with open(config_path) as f:
+            config.read_file(f)
+    except IOError:
+        print(f'{caller_name}: Config file not found --- \'{config_path}\'')
+        quit()
+    
+    return config
+
+
+def getConfigParser(prj_root, caller_name):
     # parse argument to look for user ini file
     parser = argparse.ArgumentParser()
     default_config = str(Path(prj_root).joinpath('default.ini'))
@@ -28,16 +41,8 @@ def getConfigParser(prj_root, file_name):
 
     # get config file
     config_path = args.config
-    config = configparser.ConfigParser(allow_no_value=True)
-
-    try:
-        with open(config_path) as f:
-            config.read_file(f)
-    except IOError:
-        print(f'dataset_visualizer: Config file not found --- \'{config_path}\'')
-        quit()
     
-    return config
+    return openConfig(config_path, caller_name)
 
 
 # for determinism in torch DataLoader https://pytorch.org/docs/stable/notes/randomness.html
