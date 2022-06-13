@@ -6,7 +6,7 @@ from neuralacoustics.utils import MatReader
 
 
 
-def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, permute=False):
+def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, start_ch=0, permute=False):
   
   print('Loading dataset:', dataset_name)
 
@@ -29,11 +29,14 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, permute
   w = config['dataset_generation'].getint('w')
   h = config['dataset_generation'].getint('h')
   ch = config['dataset_generation'].getint('chunks') # number of chunks (files)
-
+  
   ch_size = config['dataset_details'].getint('chunk_size') # number of entries in each chunk (files)
   rem_size = config['dataset_details'].getint('remainder_size') # number of entries in reminder file (if any)
   rem = int(rem_size > 0) # is there reminder file?
 
+  # if the requested start chunk file is default [<0] or above number of chunks, then start from 0
+  if(start_ch <0 or start_ch>ch+rem-1): # start chunk file can be remainder file
+    start_ch = 0
 
   
   #--------------------------------------------------------------
@@ -53,18 +56,18 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, permute
   if win_lim > 0 and win_lim < T and win_lim >= win:
     T = win_lim 
 
-
-
-
   # check that window size is smaller than number of timesteps per each data entry
   assert (T >= win)  
 
   # each entry in the dataset is now split in several trainig points, as big as T_in+T_out
   #p_num = T-(win-1) # number of points per each dataset entry  
   p_num = int( (T-win)/stride ) +1 # number of points per each dataset entry  
-  p_tot = N * p_num # all training points in dataset
-  print('\tAvailble points in dataset:', p_tot)
-  print('\tPoints requested:', n)
+  p_tot = (N-ch_size*start_ch) * p_num # all training points in dataset
+  if(start_ch==0):
+    print(f'\tAvailble points in dataset: {p_tot}')
+  else:
+    print(f'\tAvailble points in dataset (starting from chunk {start_ch}): {p_tot}')
+  print(f'\tPoints requested: {n}')
   assert(p_tot >= n)  
 
   # count number of checkpoints, their size and check for remainder file
@@ -79,7 +82,7 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, permute
   #print(u.shape)
 
   # actual sizes with moving window
-  ch_size_p = ch_size * p_num # number of points per each check point
+  ch_size_p = ch_size * p_num # number of points per each chunk
   rem_size_p = rem_size * p_num # number of points in remainder
 
   
@@ -95,6 +98,8 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, permute
   extra_file_needed = extra_datapoints>0
 
   print(f'\tRetrieved over {full_files} full files, {ch_size_p} points each')
+  if(start_ch>0):
+    print(f'\t\tstarting from chunk file {start_ch}')
 
   # check that all numbers are fine
   assert (full_files+extra_file_needed <= ch+rem)
@@ -103,10 +108,12 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, permute
   
   # first load from files we will read completely 
   cnt = 0
+  ff = start_ch
   for f in range(full_files):
-    dataloader = MatReader(files[f])
+    ff += f # offset is starting chunk file
+    dataloader = MatReader(files[ff])
     uu = dataloader.read_field('u')
-    #print(f, files[f])
+    #print('------------------', ff, files[ff])
     # unroll all entries with moving window
     for e in range(0, ch_size):
       # window extracts p_num points from each dataset entry
@@ -125,7 +132,7 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, permute
   if extra_datapoints>0:
     print(f'\tPlus {extra_datapoints} points from further file')
     extra_entries = (extra_datapoints+0.5)//p_num # ceiling to be sure to have enough entries to unroll
-    dataloader = MatReader(files[full_files])
+    dataloader = MatReader(files[ff])
     uu = dataloader.read_field('u')
     entry = -1
     while cnt < n:

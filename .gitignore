@@ -1,5 +1,6 @@
 **/datasets
 **/models
+**/models_bu
 **.code-workspace
 **.pyc
 **.ipynb

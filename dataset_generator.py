@@ -58,11 +58,13 @@ dataset_root_ = config['dataset_generation'].get('dataset_dir') # keep original 
 dataset_root = dataset_root_.replace('PRJ_ROOT', prj_root)
 dataset_root = Path(dataset_root)
 
-dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
-
 dev_ = config['dataset_generation'].get('dev') # cpu or gpu, keep original for dataset config
 dev = dev_
 
+dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
+# seconds to pause between datapoints during visualization
+pause = config['dataset_generation'].getint('pause_sec')
+# only used in dry run and it will be ignored in solver if <= 0
 
 #-------------------------------------------------------------------------------
 # determinism
@@ -310,4 +312,4 @@ else:
   disp_rate = 1/1
   b = 1 # 1 entry batch
 
-  sol, _ = model.run(dev, 1/samplerate, nsteps, b, True, disp_rate)
+  sol, _ = model.run(dev, 1/samplerate, nsteps, b, True, disp_rate, pause)

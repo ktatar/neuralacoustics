@@ -72,7 +72,7 @@ def load(model_name, config_path, _w, _h):
     return
 
 
-def run(dev, dt, nsteps, b, disp=False, dispRate=1):
+def run(dev, dt, nsteps, b, disp=False, dispRate=1, pause=0):
     
     # set parameters
 
@@ -114,7 +114,7 @@ def run(dev, dt, nsteps, b, disp=False, dispRate=1):
 
     #--------------------------------------------------------------
     # run solver
-    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate)
+    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
 
     return [sol, sol_t]
 

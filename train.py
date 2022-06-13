@@ -86,6 +86,7 @@ print(f'\tinput steps: {T_in}')
 print(f'\toutput steps: {T_out}')
 print(f'\tmodes: {modes}')
 print(f'\twidth: {width}')
+print(f'\tbatch size: {batch_size}')
 print(f'\tepochs: {epochs}')
 print(f'\tlearning_rate: {learning_rate}')
 print(f'\tscheduler_step: {scheduler_step}')
@@ -149,7 +150,7 @@ print() # a new line
 
 t1 = default_timer()
 
-u = loadDataset(dataset_name, dataset_dir, n_train+n_test, T_in+T_out, win_stride, win_limit, permute)
+u = loadDataset(dataset_name, dataset_dir, n_train+n_test, T_in+T_out, win_stride, win_limit, 0, permute)
 # get domain size
 sh = list(u.shape)
 S = sh[1] 
@@ -175,12 +176,12 @@ num_workers = 1 # for now single-process data loading, called explicitly to assu
 train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True, 
 num_workers=num_workers, worker_init_fn=seed_worker, generator=g)
 test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u), batch_size=batch_size, shuffle=False, 
-num_workers=num_workers, worker_init_fn=seed_worker, generator=g) #VIC not sure if seed_worker and generator needed here, even multi-process calls
+num_workers=num_workers, worker_init_fn=seed_worker, generator=g) #VIC not sure if seed_worker and generator needed here, even in multi-process calls
 # because there is no shuffle
 
 t2 = default_timer()
 
-print(f'\nDataset preprocessing finished, time used: {t2-t1}s')
+print(f'\nDataset preprocessing finished, elapsed time: {t2-t1}s')
 print(f'Training input shape: {train_a.shape}, output shape: {train_u.shape}')    
 
 
@@ -213,6 +214,7 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step,
 # train!
 
 print('\n___Start training!___')
+t1 = default_timer()
 #VIC test
 # train_features, train_labels = next(iter(train_loader))
 # print(train_features.size())
@@ -320,7 +322,9 @@ final_train_loss = '{:.4f}'.format(epoch_train_loss_full)
 final_test_loss = '{:.4f}'.format(epoch_test_loss_full)
 
 print('___Training done!___')
-
+t2 = default_timer()
+train_duration = t2-t1
+print(f"Elapsed time: {train_duration}s")
 
 #-------------------------------------------------------------------------------
 
@@ -347,6 +351,7 @@ config_model.add_section('model_details')
 config_model.set('model_details', 'name', model_name)
 config_model.set('model_details', 'train_loss', final_train_loss)
 config_model.set('model_details', 'test_loss', final_test_loss)
+config_model.set('model_details', 'training_duration', train_duration)
 
 
 
