@@ -78,6 +78,8 @@ seed = config['training'].getint('seed')
 
 dev = config['training'].get('dev')
 
+save_step = 10
+
 print('Model and training parameters:')
 print(f'\tdataset name: {dataset_name}')
 print(f'\trequested training data points: {n_train}')
@@ -207,6 +209,7 @@ print('Device:', dev)
 
 print(f'Nunmber of model\'s parameters: {count_params(model)}')
 optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+# optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
 
 
@@ -312,6 +315,19 @@ for ep in range(epochs):
     log_str = '{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}'.format(ep, t2-t1, epoch_train_loss_step, epoch_train_loss_full, epoch_test_loss_step, epoch_test_loss_full)
     f.write(log_str)
     print(f'{ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
+
+    # Save model every save_step epochs
+    if (ep + 1) % save_step == 0:
+        save_model_name = model_name + "_" + str(ep)
+        save_model_path = model_dir.joinpath(save_model_name)
+        torch.save({
+            'epoch': ep,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+        },
+        save_model_path)
+        print("Save model:", save_model_name)
 
 f.close()
 #writer.flush()
