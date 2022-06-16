@@ -15,3 +15,6 @@
 **.jpeg
 !images/*.jpg
 **cdr*.out
+*.output
+*.error
+train_out
