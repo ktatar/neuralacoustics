@@ -2,6 +2,9 @@ import torch
 from timeit import default_timer
 import configparser
 from pathlib import Path
+from datetime import datetime # for current date time in name of model
+import socket # for hostname in name of model
+
 
 from neuralacoustics.model import FNO2d
 from neuralacoustics.dataset_loader import loadDataset # to load dataset
@@ -17,6 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
+
 
 
 #-------------------------------------------------------------------------------
@@ -62,6 +66,12 @@ width = config['training'].getint('network_width')
 # training parameters
 batch_size = config['training'].getint('batch_size')
 
+if batch_size>n_train or n_train%batch_size!=0:
+    print(f'##### Warning: batch size {batch_size} not submultiple of number of training points {n_train}')
+if batch_size>n_test or n_test%batch_size!=0:
+    print(f'##### Warning: batch size {batch_size} not submultiple of number of test points {n_test}')
+
+
 epochs = config['training'].getint('epochs')
 
 learning_rate = config['training'].getfloat('learning_rate')
@@ -93,6 +103,7 @@ print(f'\tepochs: {epochs}')
 print(f'\tlearning_rate: {learning_rate}')
 print(f'\tscheduler_step: {scheduler_step}')
 print(f'\tscheduler_gamma: {scheduler_gamma}')
+print(f'\tcheckpoint_step: {checkpoint_step}')
 print(f'\trandom seed: {seed}')
 
 
@@ -109,40 +120,26 @@ g = torch.Generator()
 g.manual_seed(seed)
 
 #-------------------------------------------------------------------------------
-# compute name of model
+# dirs, paths, files
 
-# count datastes in folder 
-models = list(Path(model_root).glob('*'))
-num_of_models = len(models)
-# choose new model index accordingly
-MODEL_INDEX = str(num_of_models)
-
-name_clash = True
-
-while name_clash:
-  name_clash = False
-  for model in models:
-    # in case a model with same name is there
-    if Path(model).parts[-1] == 'model_'+MODEL_INDEX:
-      name_clash = True
-      MODEL_INDEX = str(int(MODEL_INDEX)+1) # increase index
-
-model_name = 'model_'+MODEL_INDEX
+# date time and local host name
+model_name = datetime.now().strftime('%y-%m-%d_%H-%M_'+socket.gethostname())
 model_dir = model_root.joinpath(model_name) # the directory contains an extra folder with same name of model, that will include both model and log file
 
 # create folder where to save model and log file
 model_dir.mkdir(parents=True, exist_ok=True)
 
+model_path = model_dir.joinpath(model_name) # full path to model: dir+name
+
+
 # Create model checkpoint folder
 model_checkpoint_dir = model_dir.joinpath("checkpoints")
 model_checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-# model_path = model_dir.joinpath(model_name)
 
 # log
 # txt file
-f = open(str(model_dir.joinpath(model_name +'.log')), 'w')
-# f = open(str(model_path)+'.log', 'w')
+f = open(str(model_path)+'.log', 'w')
 
 # tensorboard
 writer = SummaryWriter(str(model_dir.joinpath("tensorboard")))
@@ -215,7 +212,7 @@ print('Device:', dev)
 
 print(f'Nunmber of model\'s parameters: {count_params(model)}')
 optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
-# optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
+# optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9) # this would need to be modified to handle complex arithmetic
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
 
 
@@ -224,15 +221,6 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step,
 
 print('\n___Start training!___')
 t1 = default_timer()
-#VIC test
-# train_features, train_labels = next(iter(train_loader))
-# print(train_features.size())
-# print(train_labels.size())
-# t1 = default_timer()
-# im = model(train_features)
-# t2 = default_timer()
-# print(f'\nInference finished, time used: {t2-t1}s')
-# quit()
 
 # log and print headers
 # not using same string due to formatting visualization differences
@@ -242,6 +230,9 @@ print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step 
 
 myloss = LpLoss(size_average=False)
 for ep in range(epochs):
+
+    #--------------------------------------------------------
+    # train
     model.train()
     t1 = default_timer()
     train_l2_step = 0
@@ -273,8 +264,7 @@ for ep in range(epochs):
         loss.backward()
         optimizer.step()
 
-
-
+    #--------------------------------------------------------
     # test
     test_l2_step = 0
     test_l2_full = 0
@@ -302,6 +292,10 @@ for ep in range(epochs):
     t2 = default_timer()
     scheduler.step()
 
+
+    #--------------------------------------------------------
+    #log
+
     # tensorboard log
     epoch_train_loss_step =  train_l2_step / n_train / T_out
     epoch_train_loss_full =  train_l2_full / n_train
@@ -315,16 +309,18 @@ for ep in range(epochs):
     writer.add_scalar("Loss Step/test", epoch_test_loss_step, ep)
     writer.add_scalar("Loss Full/test", epoch_test_loss_full, ep)
 
-    # log and print
+    # log file and print
     # not using same string due to formatting visualization differences
     f.write('\n')
     log_str = '{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}'.format(ep, t2-t1, epoch_train_loss_step, epoch_train_loss_full, epoch_test_loss_step, epoch_test_loss_full)
     f.write(log_str)
     print(f'{ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
 
+
+    #--------------------------------------------------------
     # Save model, optimizer and scheduler status every checkpoint_step epochs
     if checkpoint_step >= 1 and (ep + 1) % checkpoint_step == 0:
-        save_model_name = model_name + "_" + str(ep) + "ep"
+        save_model_name = model_name + '_ep{:04d}'.format(ep)
         save_model_path = model_checkpoint_dir.joinpath(save_model_name)
         torch.save({
             'epoch': ep,
@@ -333,7 +329,8 @@ for ep in range(epochs):
             'scheduler_state_dict': scheduler.state_dict(),
         },
         save_model_path)
-        print("Save model:", save_model_name)
+        print(f"\t----> checkpoint {save_model_name} saved")
+
 
 f.close()
 #writer.flush()
@@ -346,13 +343,13 @@ final_test_loss = '{:.4f}'.format(epoch_test_loss_full)
 print('___Training done!___')
 t2 = default_timer()
 train_duration = t2-t1
-print(f"Elapsed time: {train_duration}s")
+print(f"Elapsed time: {train_duration} s")
+
 
 #-------------------------------------------------------------------------------
-
-# Save the final model to checkpoint folder, only when it hasn't been saved yet
+# Save the final model checkpoint, only when it hasn't been saved yet
 if checkpoint_step < 1 or (checkpoint_step >= 1 and epochs % checkpoint_step != 0):
-    save_model_name = model_name + "_" + str(epochs - 1) + "ep"
+    save_model_name = model_name + '_ep{:04d}'.format(epochs-1)
     save_model_path = model_checkpoint_dir.joinpath(save_model_name)
     torch.save({
         'epoch': epochs - 1,
@@ -361,9 +358,14 @@ if checkpoint_step < 1 or (checkpoint_step >= 1 and epochs % checkpoint_step != 
         'scheduler_state_dict': scheduler.state_dict(),
     },
     save_model_path)
+    print(f"----> Final checkpoint {save_model_name} saved")
+
+
+# save model to folder
+torch.save(model, model_path)
 
 print(f'\nModel {model_name} saved in:')
-print('\t', model_checkpoint_dir)
+print('\t', model_dir)
 
 print(f'final train loss: {final_train_loss}')
 print(f'final test loss: {final_test_loss}\n')
