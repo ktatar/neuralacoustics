@@ -68,6 +68,8 @@ learning_rate = config['training'].getfloat('learning_rate')
 scheduler_step = config['training'].getint('scheduler_step')
 scheduler_gamma = config['training'].getfloat('scheduler_gamma')
 
+checkpoint_step = config['training'].getint('checkpoint_step')
+
 
 # misc parameters
 model_root_ = config['training'].get('model_dir') # keep original for config file
@@ -131,13 +133,19 @@ model_dir = model_root.joinpath(model_name) # the directory contains an extra fo
 # create folder where to save model and log file
 model_dir.mkdir(parents=True, exist_ok=True)
 
-model_path = model_dir.joinpath(model_name)
+# Create model checkpoint folder
+model_checkpoint_dir = model_dir.joinpath("checkpoints")
+model_checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+# model_path = model_dir.joinpath(model_name)
 
 # log
 # txt file
-f = open(str(model_path)+'.log', 'w')
+f = open(str(model_dir.joinpath(model_name +'.log')), 'w')
+# f = open(str(model_path)+'.log', 'w')
+
 # tensorboard
-writer = SummaryWriter(str(model_dir)+'/tensorboard')
+writer = SummaryWriter(str(model_dir.joinpath("tensorboard")))
 # to view: 
 # from tensordboard model dir
 # run: tensorboard --logdir=. 
@@ -207,6 +215,7 @@ print('Device:', dev)
 
 print(f'Nunmber of model\'s parameters: {count_params(model)}')
 optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+# optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
 
 
@@ -313,6 +322,19 @@ for ep in range(epochs):
     f.write(log_str)
     print(f'{ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
 
+    # Save model, optimizer and scheduler status every checkpoint_step epochs
+    if checkpoint_step >= 1 and (ep + 1) % checkpoint_step == 0:
+        save_model_name = model_name + "_" + str(ep) + "ep"
+        save_model_path = model_checkpoint_dir.joinpath(save_model_name)
+        torch.save({
+            'epoch': ep,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+        },
+        save_model_path)
+        print("Save model:", save_model_name)
+
 f.close()
 #writer.flush()
 writer.close()
@@ -328,11 +350,21 @@ print(f"Elapsed time: {train_duration}s")
 
 #-------------------------------------------------------------------------------
 
-# save model to folder
-torch.save(model, model_path)
+# Save the final model to checkpoint folder, only when it hasn't been saved yet
+if checkpoint_step < 1 or (checkpoint_step >= 1 and epochs % checkpoint_step != 0):
+    save_model_name = model_name + "_" + str(epochs - 1) + "ep"
+    save_model_path = model_checkpoint_dir.joinpath(save_model_name)
+    torch.save({
+        'epoch': epochs - 1,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+    },
+    save_model_path)
 
 print(f'\nModel {model_name} saved in:')
-print('\t', model_dir)
+print('\t', model_checkpoint_dir)
+
 print(f'final train loss: {final_train_loss}')
 print(f'final test loss: {final_test_loss}\n')
 
