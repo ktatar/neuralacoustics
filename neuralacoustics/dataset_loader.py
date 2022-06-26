@@ -108,10 +108,10 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, start_c
   
   # first load from files we will read completely 
   cnt = 0
-  ff = start_ch
-  for f in range(full_files):
-    ff += f # offset is starting chunk file
+  ff = start_ch # offset is starting chunk file
+  for f in range(full_files): 
     dataloader = MatReader(files[ff])
+    ff += 1
     uu = dataloader.read_field('u')
     #print('------------------', ff, files[ff])
     # unroll all entries with moving window
@@ -132,7 +132,7 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, start_c
   if extra_datapoints>0:
     print(f'\tPlus {extra_datapoints} points from further file')
     extra_entries = (extra_datapoints+0.5)//p_num # ceiling to be sure to have enough entries to unroll
-    dataloader = MatReader(files[ff])
+    dataloader = MatReader(files[ff]) # ff is file after the last full file loaded
     uu = dataloader.read_field('u')
     entry = -1
     while cnt < n:
