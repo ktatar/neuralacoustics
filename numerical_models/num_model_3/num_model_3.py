@@ -19,10 +19,10 @@ init_size_max = -1
 
 # places random impuse randomly in the matrix passed as an argument (xi0)
 def add_random_impulse(b_size, xi_imp, w, h): 
-  rand_pos_x = rd.randint(0, w-2) # generates a position in xi0 to place the impulse
-  rand_pos_y = rd.randint(0, h-2)
-  xi_imp[:, rand_pos_y, rand_pos_x] = torch.randn(b_size) # places random impulse in location
-
+    rand_pos_x = torch.randint(w, (b_size,1))
+    rand_pos_y = torch.randint(h, (b_size,1))
+    xi_imp[range(b_size), rand_pos_y[:,0], rand_pos_x[:,0]] = torch.randn(b_size) # places random impulse in location
+    # tensor indexing with range() instead of ':' adapted from here: https://stackoverflow.com/questions/61096522/pytorch-tensor-advanced-indexing
 
 def load(model_name, config_path, _w, _h):    
     # to prevent python from declaring new local variables with the same names

@@ -173,7 +173,7 @@ def run(dev, dt, nsteps, b, disp=False, dispRate=1, pause=0):
     real = torch.zeros(b, H, num_xFreqs)
     imag = torch.zeros(b, H, num_xFreqs)
     freq = torch.complex(real, imag)
-    # an alternative solutiun to we switch to frequency domain:
+    # an alternative solution to switch to frequency domain:
     #freq = torch.fft.rfft2(xi0) # ready to initialize the domain in the spatial frequency domain!
 
     # spatial frequency initialization

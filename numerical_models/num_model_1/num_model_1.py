@@ -19,11 +19,17 @@ init_size_max = -1
 
 # places a submatrix of noise randomly in the matrix passed as an argument (xi0)
 def add_random_noise(b_size, xinoise, w, h, min_side, max_side): 
-  rand_size = rd.randint(min_side, max_side) # generates a random size for the submatrix, between min_side and max_side inclusive
-  rand_pos_x = rd.randint(0, w-2-rand_size) # generates a position in xi0 to place the submatrix (makes sure not to cut off the submatrix)
-  rand_pos_y = rd.randint(0, h-2-rand_size)
-  xinoise[:, rand_pos_y:(rand_pos_y + rand_size), rand_pos_x:(rand_pos_x + rand_size)] = torch.randn(b_size, rand_size, rand_size) # places the submatrix in xi0
+    rand_size = rd.randint(min_side, max_side) # generates a random size for the submatrix, between min_side and max_side inclusive
+    
+    # generates a position in xi0 to place the submatrix (makes sure not to cut off the submatrix)
+    rand_pos_x = torch.randint(w-rand_size, (b_size,1))
+    rand_pos_y = torch.randint(h-rand_size, (b_size,1))
 
+    sub_noise = torch.randn(b_size, rand_size, rand_size) # noise submatrix
+
+    for b in range(b_size):
+        xinoise[b, rand_pos_y[b,0]:(rand_pos_y[b,0] + rand_size), rand_pos_x[b,0]:(rand_pos_x[b,0] + rand_size)] = sub_noise[b] # places the submatrix in xi0
+        #VIC any better way of doing this?
 
 def load(model_name, config_path, _w, _h):    
     # to prevent python from declaring new local variables with the same names

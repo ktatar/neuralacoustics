@@ -87,28 +87,40 @@ if timestep_range <= 0:
 
 print('dataset shape:', shape)
 print(f'\tdataset has {shape[0]} datapoints -> n')
-print(f'\teach composed of {window} timsteps -> window_size')
+print(f'\teach composed of {window} timesteps -> window_size')
 print(f'\tconsecutive datapoints are {stride} timesteps apart -> window_stride')
 if limit > 0:
   print(f'\tand there cannot be more than {limit} consecutive timsteps -> window_limit')
-else :
+else:
   print('\tand no limit on consecutive timesteps -> window_limit')
 
 
 #-------------------------------------------------------------------------------
 # visualize
 
-# when stride is lower than window size, it is still possible to visualize consecutive timsteps
+# when stride is lower than window size, it is still possible to visualize consecutive timesteps
 # by setting timestep_range lower than window size
 # this is handy when we want to visually check dataset entries
 
 datapoints = u[datapoint_index:datapoint_index+num_of_datapoints, ...]
 for d_n in range(0, num_of_datapoints):
     for t_n in range(0, timestep_range):
-        print(f'datapoint {datapoint_index+d_n}, timstep {t_n} (max: {datapoints[d_n, ..., t_n].max()})')
-        if pause <= 0:
-          plotDomain(datapoints[d_n, ..., t_n])
+
+        dp = datapoints[d_n, ..., t_n]
+        
+        dp_ab = dp.abs()
+        max_indices = (dp_ab==dp_ab.max()).nonzero() # search for arg max in all dim, adapter from here: https://discuss.pytorch.org/t/get-indices-of-the-max-of-a-2d-tensor/82150
+        
+        # if more than 1 max, we pick first one
+        if max_indices.shape[0] > 1:
+          max_indices = max_indices[0,:] # size becomes [2]
         else:
-          plotDomain(datapoints[d_n, ..., t_n], pause=pause)
+          max_indices = max_indices.squeeze() # so that size changes from [1,2] to [2]
+        
+        print(f'datapoint {datapoint_index+d_n}, timstep {t_n} (max: {dp[max_indices[0], max_indices[1]]})') #VIC any better way of doing this?
+        if pause <= 0:
+           plotDomain(dp)
+        else:
+           plotDomain(dp, pause=pause)
 
 

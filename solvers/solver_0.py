@@ -131,7 +131,7 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
           plotDomain(displacement)
         else:
           plotDomain(displacement, pause=pause)
- 
+           
     t += dt 
 
     # save return values
