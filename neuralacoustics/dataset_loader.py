@@ -6,8 +6,8 @@ from neuralacoustics.utils import MatReader
 
 
 
-def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, start_ch=0, permute=False):
-  
+def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, start_ch=0, entry=-1, permute=False):
+  """Load dataset from .mat file and return as PyTorch tensors."""
   print('Loading dataset:', dataset_name)
 
   #--------------------------------------------------------------
@@ -37,6 +37,10 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, start_c
   # if the requested start chunk file is default [<0] or above number of chunks, then start from 0
   if(start_ch <0 or start_ch>ch+rem-1): # start chunk file can be remainder file
     start_ch = 0
+  
+  # Check validity of entry index
+  if entry >= ch * ch_size + rem_size:
+    raise AssertionError("Entry index larger than dataset size")
 
   
   #--------------------------------------------------------------
@@ -91,6 +95,22 @@ def loadDataset(dataset_name, dataset_root, n, win, stride=0, win_lim=0, start_c
   #--------------------------------------------------------------
   # let's load
 
+  # Load only the target entry if entry is specified
+  if entry >= 0:
+    cnt = 0
+    file_index = entry // ch_size
+    entry_in_file = entry % ch_size
+
+    dataloader = MatReader(files[file_index])
+    uu = dataloader.read_field('u')
+    for tt in range(0, p_num):
+      t = tt*stride
+
+      u[cnt:cnt+1,...] = uu[entry_in_file,:,:,t:t+win]
+      cnt = cnt+1
+    
+    return u
+    
   # check how many files we need to cover n points
   full_files = n//(ch_size_p)
   extra_datapoints = n%ch_size_p

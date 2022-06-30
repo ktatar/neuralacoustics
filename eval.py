@@ -1,6 +1,7 @@
 import torch
 
 from pathlib import Path
+from timeit import default_timer
 
 from neuralacoustics.model import FNO2d
 from neuralacoustics.dataset_loader import loadDataset # to load dataset
@@ -45,8 +46,19 @@ checkpoint_name = config['evaluation'].get('checkpoint_name')
 
 model_path = Path(model_root).joinpath(model_name).joinpath('checkpoints').joinpath(checkpoint_name)
 
+# Load model structure parameters
+model_ini_path = Path(model_root).joinpath(model_name).joinpath(model_name+'.ini')
+if model_ini_path.is_file():
+    model_config = getConfigParser(model_ini_path, __file__)
 
-#-------------------------------------------------------------------------------
+    network_mode = model_config['training'].getint('network_modes')
+    network_width = model_config['training'].getint('network_width')
+else:
+    print("Cannot find model .ini file, using default structure parameters")
+    network_mode = 12
+    network_width = 20
+
+
 # Determinism (https://pytorch.org/docs/stable/notes/randomness.html)
 torch.use_deterministic_algorithms(True) 
 torch.backends.cudnn.deterministic = True 
@@ -58,6 +70,7 @@ g.manual_seed(seed)
 
 
 # VIC if dataset has nsteps >= 20, here we extract from a single entry [simulation] 10 consecutive datapoints
+# TODO: Add data entry selection
 u = loadDataset(dataset_name=dataset_name,
                 dataset_root=dataset_dir,
                 n=timesteps,
@@ -65,6 +78,7 @@ u = loadDataset(dataset_name=dataset_name,
                 stride=1,
                 win_lim=0,
                 start_ch=0,
+                entry=entry,
                 permute=False)
 
 # Get domain size
@@ -100,11 +114,11 @@ print(f'Test input shape: {test_a.shape}, output shape: {test_u.shape}')
 if dev == 'gpu' or 'cuda' in dev:
     assert(torch.cuda.is_available())
     dev = torch.device('cuda')
-    model = FNO2d(12, 12, 20, T_in).cuda()
+    model = FNO2d(network_mode, network_mode, network_width, T_in).cuda()
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
 else:
     dev = torch.device('cpu')
-    model = FNO2d(12, 12, 20, T_in)
+    model = FNO2d(network_mode, network_mode, network_width, T_in)
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
 
 model.eval()
@@ -118,12 +132,13 @@ for features, label in test_loader:
     # t1 = default_timer()
     prediction = model(features)
     # t2 = default_timer()
-    # print(f'\nInference step computation time: {t2-t1}s')
+    # print(f'\nInference step computation time: {t2 - t1}s')
 
     # subplots
     domains = torch.stack([prediction, label])
     titles = ['Prediction','Ground Truth']
     plot2Domains(domains[:,0,...,0], pause=pause_sec, figNum=1, titles=titles)
+    # TODO: plot the diff
     # two different windows
     # plotDomain(prediction[0,...,0], pause=pause, figNum=2)
     # plotDomain(label[0,...,0], pause=pause, figNum=1)

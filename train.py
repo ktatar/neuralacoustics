@@ -155,7 +155,7 @@ print() # a new line
 
 t1 = default_timer()
 
-u = loadDataset(dataset_name, dataset_dir, n_train+n_test, T_in+T_out, win_stride, win_limit, 0, permute)
+u = loadDataset(dataset_name, dataset_dir, n_train+n_test, T_in+T_out, win_stride, win_limit, 0, -1, permute)
 # get domain size
 sh = list(u.shape)
 S = sh[1] 

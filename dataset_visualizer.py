@@ -74,7 +74,7 @@ torch.manual_seed(seed)
 
 #-------------------------------------------------------------------------------
 # retrieve all data points
-u = loadDataset(dataset_name, dataset_dir, n, window, stride, limit, start_ch, permute)
+u = loadDataset(dataset_name, dataset_dir, n, window, stride, limit, start_ch, -1, permute)
 
 shape = list(u.shape)
 
