@@ -6,7 +6,8 @@ from timeit import default_timer
 from neuralacoustics.model import FNO2d
 from neuralacoustics.dataset_loader import loadDataset # to load dataset
 from neuralacoustics.data_plotter import plotDomain # to plot data entries (specific series of domains)
-from neuralacoustics.data_plotter import plot2Domains, plot3Domains # to plot data entries (specific series of domains)
+# to plot data entries (specific series of domains)
+from neuralacoustics.data_plotter import plot2Domains, plot3Domains, plotWaveform
 from neuralacoustics.utils import seed_worker # for PyTorch DataLoader determinism
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
@@ -31,8 +32,9 @@ entry = config['evaluation'].getint('entry')
 timesteps = config['evaluation'].getint('timesteps')
 pause_sec = config['evaluation'].getint('pause_sec')
 
-mic_x = config['evaluation'].getfloat('mic_x')
-mic_y = config['evaluation'].getfloat('mic_y')
+mic_x = config['evaluation'].getint('mic_x')
+mic_y = config['evaluation'].getint('mic_y')
+plot_waveform = mic_x >= 0 and mic_y >= 0
 
 dev = config['evaluation'].get('dev')
 seed = config['evaluation'].getint('seed')
@@ -85,6 +87,14 @@ S = u_shape[1]
 # Assume that all datasets have simulations spanning square domains
 assert(S == u_shape[2])
 
+if plot_waveform:
+    # Check validity of mic_x and mic_y
+    if mic_x >= S or mic_y >= S:
+        raise AssertionError("mic_x/mic_y out of bound")
+    
+    pred_waveform = torch.zeros(timesteps)
+    label_waveform = torch.zeros(timesteps)
+    
 # Prepare test set
 n_test = timesteps
 test_a = u[-n_test:, :, :, :T_in]
@@ -123,13 +133,20 @@ model.eval()
 print(f"Load model from path: {model_path}")
 
 # Start evaluation
-for features, label in test_loader:
+total_time = 0
+for i, (features, label) in enumerate(test_loader):
     features = features.to(dev)
     label = label.to(dev)
 
-    # t1 = default_timer()
+    t1 = default_timer()
     prediction = model(features)
-    # t2 = default_timer()
+    t2 = default_timer()
+    total_time += t2 - t1
+
+    if plot_waveform:
+        pred_waveform[i] = prediction[0, mic_x, mic_y, 0]
+        label_waveform[i] = label[0, mic_x, mic_y, 0]
+
     # print(f'\nInference step computation time: {t2 - t1}s')
 
     # subplots
@@ -145,11 +162,15 @@ for features, label in test_loader:
     # plotDomain(prediction[0,...,0], pause=pause, figNum=2)
     # plotDomain(label[0,...,0], pause=pause, figNum=1)
 
-    # TODO: record waveform by microphone
-
     # auto-regressive
     features = torch.cat((features, prediction), -1)
 
+print(f'Total inference computation time: {total_time}s')
+
+# Plot waveform
+if plot_waveform:
+    plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
+                 'Prediction', 'Ground Truth'])
 
 
 
