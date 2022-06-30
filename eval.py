@@ -1,5 +1,6 @@
 import torch
-from timeit import default_timer
+
+from pathlib import Path
 
 from neuralacoustics.model import FNO2d
 from neuralacoustics.dataset_loader import loadDataset # to load dataset
@@ -10,100 +11,107 @@ from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
 
 
-# retrieve PRJ_ROOT
+# Retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
 
+# Get configuration parameters for evaluation
+config = getConfigParser(prj_root, __file__)
 
+# Dataset
+dataset_name = config['evaluation'].get('dataset_name')
+dataset_dir = config['evaluation'].get('dataset_dir')
+dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
 
+T_in = config['evaluation'].getint('T_in')
+T_out = config['evaluation'].getint('T_out')
 
+# Evaluation setting
+entry = config['evaluation'].getint('entry')
+timesteps = config['evaluation'].getint('timesteps')
+pause_sec = config['evaluation'].getint('pause_sec')
 
+mic_x = config['evaluation'].getfloat('mic_x')
+mic_y = config['evaluation'].getfloat('mic_y')
 
-dataset_name = 'dataset_2'
-model_path = 'models_bu/22-06-27_04-23_c2185/22-06-27_04-23_c2185'
+dev = config['evaluation'].get('dev')
+seed = config['evaluation'].getint('seed')
 
-pause = 0.5
+# Model
+model_root = config['evaluation'].get('model_dir')
+model_root = model_root.replace('PRJ_ROOT', prj_root)
 
-seed = 0
+model_name = config['evaluation'].get('model_name')
+checkpoint_name = config['evaluation'].get('checkpoint_name')
 
-
-
-
+model_path = Path(model_root).joinpath(model_name).joinpath('checkpoints').joinpath(checkpoint_name)
 
 
 #-------------------------------------------------------------------------------
-# determinism
-# https://pytorch.org/docs/stable/notes/randomness.html
-# generic
+# Determinism (https://pytorch.org/docs/stable/notes/randomness.html)
 torch.use_deterministic_algorithms(True) 
 torch.backends.cudnn.deterministic = True 
 
-# needed for DataLoader 
+# Determinism for DataLoader 
 torch.manual_seed(seed) # for permutation in loadDataset() and  seed_worker() in utils.py
 g = torch.Generator()
 g.manual_seed(seed)
 
 
+# VIC if dataset has nsteps >= 20, here we extract from a single entry [simulation] 10 consecutive datapoints
+u = loadDataset(dataset_name=dataset_name,
+                dataset_root=dataset_dir,
+                n=timesteps,
+                win=T_in+T_out,
+                stride=1,
+                win_lim=0,
+                start_ch=0,
+                permute=False)
 
+# Get domain size
+u_shape = list(u.shape)
+S = u_shape[1] 
+# Assume that all datasets have simulations spanning square domains
+assert(S == u_shape[2])
 
-#-------------------------------------------------------------------------------
-# load dataset
-
-dataset_dir = 'PRJ_ROOT/datasets'
-dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
-
-S = 64
-batch_size = 1
-
-#VIC if dataset has nsteps >= 20, here we extract from a single entry [simulation] 10 consecutive datapoints
-T_in = 10
-T_out = 1
-n_test = 10
-win_stride = 1
-win_limit = 20
-start_ch = 0
-permute = False
-
-u = loadDataset(dataset_name, dataset_dir, n_test, T_in+T_out, win_stride, win_limit, start_ch, permute)
-
-# get domain size
-sh = list(u.shape)
-S = sh[1] 
-# we assume that all datasets have simulations spanning square domains
-assert(S == sh[2])
-
-# prepare test set
-test_a = u[-n_test:,:,:,:T_in]
-test_u = u[-n_test:,:,:,T_in:T_in+T_out]
+# Prepare test set
+n_test = timesteps
+test_a = u[-n_test:, :, :, :T_in]
+test_u = u[-n_test:, :, :, T_in:T_in+T_out]
 
 #print(train_u.shape, test_u.shape)
 assert(S == test_u.shape[-2])
 assert(T_out == test_u.shape[-1])
 
-test_a = test_a.reshape(n_test,S,S,T_in)
+test_a = test_a.reshape(n_test, S, S, T_in)
 
 num_workers = 1 # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
 
-# datapoints will be loaded from this
-test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u), batch_size=batch_size, shuffle=False, 
-num_workers=num_workers, worker_init_fn=seed_worker, generator=g)
-
+# Dataloader
+test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u),
+                                          batch_size=1,
+                                          shuffle=False,
+                                          num_workers=num_workers,
+                                          worker_init_fn=seed_worker,
+                                          generator=g)
 print(f'Test input shape: {test_a.shape}, output shape: {test_u.shape}')    
 
+# Load model
 
+if dev == 'gpu' or 'cuda' in dev:
+    assert(torch.cuda.is_available())
+    dev = torch.device('cuda')
+    model = FNO2d(12, 12, 20, T_in).cuda()
+    model.load_state_dict(torch.load(model_path)['model_state_dict'])
+else:
+    dev = torch.device('cpu')
+    model = FNO2d(12, 12, 20, T_in)
+    model.load_state_dict(torch.load(model_path)['model_state_dict'])
 
+model.eval()
+print(f"Load model from path: {model_path}")
 
-#-------------------------------------------------------------------------------
-# load model
-dev  = torch.device('cpu')
-model = torch.load(model_path, dev)
-
-
-
-#-------------------------------------------------------------------------------
-# test
-
+# Start evaluation
 for features, label in test_loader:
-    loss = 0
     features = features.to(dev)
     label = label.to(dev)
 
@@ -115,7 +123,7 @@ for features, label in test_loader:
     # subplots
     domains = torch.stack([prediction, label])
     titles = ['Prediction','Ground Truth']
-    plot2Domains(domains[:,0,...,0], pause=pause, figNum=1, titles=titles)
+    plot2Domains(domains[:,0,...,0], pause=pause_sec, figNum=1, titles=titles)
     # two different windows
     # plotDomain(prediction[0,...,0], pause=pause, figNum=2)
     # plotDomain(label[0,...,0], pause=pause, figNum=1)
