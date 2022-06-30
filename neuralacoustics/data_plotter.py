@@ -52,6 +52,46 @@ def plot2Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
   plt.pause(pause)
 
 
+def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0, figNum=0, titles=None):
+  img1 = prepareImgPlot(data[0], maxAmp, log_min)
+  img2 = prepareImgPlot(data[1], maxAmp, log_min)
+  img3 = prepareImgPlot(data[2], maxAmp, log_min)
+
+  if(figNum > 0):
+    fig = plt.figure(figNum)
+  else:
+    fig = plt.figure()
+
+  rows = 1
+  columns = 3
+  
+  # First plot
+  fig.add_subplot(rows, columns, 1)
+  plt.imshow(img1, vmin=-color_halfrange, vmax=color_halfrange)
+  #plt.axis('off')
+  if titles != None:
+    plt.title(titles[0])
+    
+  # Second plot
+  fig.add_subplot(rows, columns, 2)
+  plt.imshow(img2, vmin=-color_halfrange, vmax=color_halfrange)
+  #plt.axis('off')
+  if titles != None:
+    plt.title(titles[1])
+
+  # Third plot
+  fig.add_subplot(rows, columns, 3)
+  plt.imshow(img3, vmin=-color_halfrange, vmax=color_halfrange)
+  #plt.axis('off')
+  if titles != None:
+    plt.title(titles[2])
+
+  # Proceed through timer or user input
+  if pause == 0:
+    plt.waitforbuttonpress()
+  else:
+    plt.pause(pause)
+  
 
 #-------------------------------------------------------------------------------------------------------
 

@@ -6,7 +6,7 @@ from timeit import default_timer
 from neuralacoustics.model import FNO2d
 from neuralacoustics.dataset_loader import loadDataset # to load dataset
 from neuralacoustics.data_plotter import plotDomain # to plot data entries (specific series of domains)
-from neuralacoustics.data_plotter import plot2Domains # to plot data entries (specific series of domains)
+from neuralacoustics.data_plotter import plot2Domains, plot3Domains # to plot data entries (specific series of domains)
 from neuralacoustics.utils import seed_worker # for PyTorch DataLoader determinism
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
@@ -68,9 +68,7 @@ torch.manual_seed(seed) # for permutation in loadDataset() and  seed_worker() in
 g = torch.Generator()
 g.manual_seed(seed)
 
-
 # VIC if dataset has nsteps >= 20, here we extract from a single entry [simulation] 10 consecutive datapoints
-# TODO: Add data entry selection
 u = loadDataset(dataset_name=dataset_name,
                 dataset_root=dataset_dir,
                 n=timesteps,
@@ -135,13 +133,19 @@ for features, label in test_loader:
     # print(f'\nInference step computation time: {t2 - t1}s')
 
     # subplots
-    domains = torch.stack([prediction, label])
-    titles = ['Prediction','Ground Truth']
-    plot2Domains(domains[:,0,...,0], pause=pause_sec, figNum=1, titles=titles)
-    # TODO: plot the diff
+    # domains = torch.stack([prediction, label])
+    # titles = ['Prediction','Ground Truth']
+    # plot2Domains(domains[:,0,...,0], pause=pause_sec, figNum=1, titles=titles)
+
+    domains = torch.stack([prediction, label, prediction - label])
+    titles = ['Prediction','Ground Truth', 'Diff']
+    plot3Domains(domains[:,0,...,0], pause=pause_sec, figNum=1, titles=titles)
+
     # two different windows
     # plotDomain(prediction[0,...,0], pause=pause, figNum=2)
     # plotDomain(label[0,...,0], pause=pause, figNum=1)
+
+    # TODO: record waveform by microphone
 
     # auto-regressive
     features = torch.cat((features, prediction), -1)
