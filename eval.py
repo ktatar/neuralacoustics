@@ -19,9 +19,7 @@ from neuralacoustics.data_plotter import plotDomain
 # to plot data entries (specific series of domains)
 from neuralacoustics.data_plotter import plot2Domains, plot3Domains, plotWaveform
 # for PyTorch DataLoader determinism
-from neuralacoustics.utils import seed_worker
-from neuralacoustics.utils import getProjectRoot
-from neuralacoustics.utils import getConfigParser
+from neuralacoustics.utils import openConfig, getConfigParser, seed_worker, getProjectRoot
 
 
 # Retrieve PRJ_ROOT
@@ -34,9 +32,6 @@ config = getConfigParser(prj_root, __file__)
 dataset_name = config['evaluation'].get('dataset_name')
 dataset_dir = config['evaluation'].get('dataset_dir')
 dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
-
-T_in = config['evaluation'].getint('T_in')
-T_out = config['evaluation'].getint('T_out')
 
 # Evaluation setting
 entry = config['evaluation'].getint('entry')
@@ -63,15 +58,12 @@ model_path = Path(model_root).joinpath(model_name).joinpath(
 # Load model structure parameters
 model_ini_path = Path(model_root).joinpath(
     model_name).joinpath(model_name+'.ini')
-if model_ini_path.is_file():
-    model_config = getConfigParser(model_ini_path, __file__)
+model_config = openConfig(model_ini_path, __file__)
 
-    network_mode = model_config['training'].getint('network_modes')
-    network_width = model_config['training'].getint('network_width')
-else:
-    print("Cannot find model .ini file, using default structure parameters")
-    network_mode = 12
-    network_width = 20
+network_mode = model_config['training'].getint('network_modes')
+network_width = model_config['training'].getint('network_width')
+T_in = model_config['training'].getint('T_in')
+T_out = model_config['training'].getint('T_out')
 
 
 # Determinism (https://pytorch.org/docs/stable/notes/randomness.html)
@@ -147,7 +139,6 @@ model.eval()
 print(f"Load model from path: {model_path}")
 
 # Start evaluation
-total_time = 0
 for i, (features, label) in enumerate(test_loader):
     features = features.to(dev)
     label = label.to(dev)
@@ -155,13 +146,11 @@ for i, (features, label) in enumerate(test_loader):
     t1 = default_timer()
     prediction = model(features)
     t2 = default_timer()
-    total_time += t2 - t1
+    print(f'Inference step computation time: {t2 - t1}s')
 
     if plot_waveform:
         pred_waveform[i] = prediction[0, mic_x, mic_y, 0]
         label_waveform[i] = label[0, mic_x, mic_y, 0]
-
-    # print(f'\nInference step computation time: {t2 - t1}s')data points
 
     # subplots
     # domains = torch.stack([prediction, label])
@@ -179,8 +168,6 @@ for i, (features, label) in enumerate(test_loader):
 
     # auto-regressive
     features = torch.cat((features, prediction), -1)
-
-print(f'Total inference computation time: {total_time}s')
 
 # Plot waveform
 if plot_waveform:

@@ -16,7 +16,12 @@ def plotDomain(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, 
   # all this non-sense is needed to have a proper non-blocking plot
   # plt.ion()
   # plt.show()
-  plt.pause(pause)
+
+  # Proceed through timer or user input
+  if pause == -1:
+    plt.waitforbuttonpress()
+  else:
+    plt.pause(pause)
 
 
 def plot2Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, figNum=0, titles=None):
@@ -50,7 +55,11 @@ def plot2Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
   if titles != None:
     plt.title(titles[1])
 
-  plt.pause(pause)
+  # Proceed through timer or user input
+  if pause == -1:
+    plt.waitforbuttonpress()
+  else:
+    plt.pause(pause)
 
 
 def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0, figNum=0, titles=None):
@@ -89,7 +98,7 @@ def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0, fi
     plt.title(titles[2])
 
   # Proceed through timer or user input
-  if pause == 0:
+  if pause == -1:
     plt.waitforbuttonpress()
   else:
     plt.pause(pause)
