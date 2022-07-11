@@ -13,7 +13,8 @@ from pathlib import Path
 from timeit import default_timer
 
 from neuralacoustics.model import FNO2d
-from neuralacoustics.dataset_loader import loadDataset  # to load dataset
+# from neuralacoustics.dataset_loader import loadDataset  # to load dataset
+from neuralacoustics.dataset_loader import DatasetManager
 # to plot data entries (specific series of domains)
 from neuralacoustics.data_plotter import plotDomain
 # to plot data entries (specific series of domains)
@@ -77,15 +78,8 @@ g = torch.Generator()
 g.manual_seed(seed)
 
 # VIC if dataset has nsteps >= 20, here we extract from a single entry [simulation] 10 consecutive datapoints
-u = loadDataset(dataset_name=dataset_name,
-                dataset_root=dataset_dir,
-                n=timesteps,
-                win=T_in+T_out,
-                stride=1,
-                win_lim=0,
-                start_ch=0,
-                entry=entry,
-                permute=False)
+dataset_manager = DatasetManager(dataset_name, dataset_dir)
+u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry)
 
 # Get domain size
 u_shape = list(u.shape)

@@ -1,5 +1,6 @@
 import torch
-from neuralacoustics.dataset_loader import loadDataset # to load dataset
+# from neuralacoustics.dataset_loader import loadDataset # to load dataset
+from neuralacoustics.dataset_loader import DatasetManager
 from neuralacoustics.data_plotter import plotDomain # to plot data entries (specific series of domains)
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
@@ -74,7 +75,15 @@ torch.manual_seed(seed)
 
 #-------------------------------------------------------------------------------
 # retrieve all data points
-u = loadDataset(dataset_name, dataset_dir, n, window, stride, limit, start_ch, -1, permute)
+dataset_manager = DatasetManager(dataset_name, dataset_dir)
+u = dataset_manager.loadData(
+  n=n,
+  win=window,
+  stride=stride,
+  win_lim=limit,
+  start_ch=start_ch,
+  permute=permute
+)
 
 shape = list(u.shape)
 
