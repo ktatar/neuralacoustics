@@ -118,6 +118,12 @@ test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a,
 print(f'Test input shape: {test_a.shape}, output shape: {test_u.shape}')
 
 # Load model
+# Use the last checkpoint if the provided checkpoint is not valid
+if not model_path.is_file():
+    checkpoint_path = Path(model_root).joinpath(model_name).joinpath('checkpoints')
+    checkpoints = [x.name for x in list(checkpoint_path.glob('*'))]
+    checkpoints.sort()
+    model_path = checkpoint_path.joinpath(checkpoints[-1])
 
 if dev == 'gpu' or 'cuda' in dev:
     assert(torch.cuda.is_available())
