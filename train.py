@@ -7,7 +7,8 @@ import socket # for hostname in name of model
 
 
 from neuralacoustics.model import FNO2d
-from neuralacoustics.dataset_loader import loadDataset # to load dataset
+# from neuralacoustics.dataset_loader import loadDataset # to load dataset
+from neuralacoustics.dataset_loader import DatasetManager
 from neuralacoustics.utils import LpLoss
 from neuralacoustics.utils import seed_worker # for PyTorch DataLoader determinism
 from neuralacoustics.utils import getProjectRoot
@@ -155,7 +156,16 @@ print() # a new line
 
 t1 = default_timer()
 
-u = loadDataset(dataset_name, dataset_dir, n_train+n_test, T_in+T_out, win_stride, win_limit, 0, permute)
+data_manager = DatasetManager(dataset_name, dataset_dir)
+u = data_manager.loadData(
+    n=n_train+n_test,
+    win=T_in+T_out,
+    stride=win_stride,
+    win_lim=win_limit,
+    start_ch=0,
+    permute=permute
+)
+
 # get domain size
 sh = list(u.shape)
 S = sh[1] 
