@@ -127,10 +127,7 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
         # print first entry in batch
         displacement = xi[0,:,:,2] * (-1*bound[0,:,:,0] + 1) # set zero displacement to boundaries, to identify them
         print(f'step {step+1} of {nsteps}')
-        if pause<=0:
-          plotDomain(displacement)
-        else:
-          plotDomain(displacement, pause=pause)
+        plotDomain(displacement, pause=pause)
            
     t += dt 
 

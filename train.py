@@ -7,8 +7,8 @@ import socket # for hostname in name of model
 
 
 from neuralacoustics.model import FNO2d
-# from neuralacoustics.dataset_loader import loadDataset # to load dataset
-from neuralacoustics.dataset_loader import DatasetManager
+# to load dataset
+from neuralacoustics.DatasetManager import DatasetManager
 from neuralacoustics.utils import LpLoss
 from neuralacoustics.utils import seed_worker # for PyTorch DataLoader determinism
 from neuralacoustics.utils import getProjectRoot

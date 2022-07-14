@@ -1,6 +1,6 @@
 import torch
-# from neuralacoustics.dataset_loader import loadDataset # to load dataset
-from neuralacoustics.dataset_loader import DatasetManager
+# to load dataset
+from neuralacoustics.DatasetManager import DatasetManager
 from neuralacoustics.data_plotter import plotDomain # to plot data entries (specific series of domains)
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
@@ -127,9 +127,6 @@ for d_n in range(0, num_of_datapoints):
           max_indices = max_indices.squeeze() # so that size changes from [1,2] to [2]
         
         print(f'datapoint {datapoint_index+d_n}, timstep {t_n} (max: {dp[max_indices[0], max_indices[1]]})') #VIC any better way of doing this?
-        if pause <= 0:
-           plotDomain(dp)
-        else:
-           plotDomain(dp, pause=pause)
+        plotDomain(dp, pause=pause)
 
 

@@ -19,7 +19,7 @@ def plotDomain(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, 
 
   # Proceed through timer or user input
   if pause == -1:
-    plt.waitforbuttonpress()
+    plt.pause(0.0001) #VIC without this, figure is not updated
   else:
     plt.pause(pause)
 
@@ -58,11 +58,12 @@ def plot2Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
   # Proceed through timer or user input
   if pause == -1:
     plt.waitforbuttonpress()
+    plt.pause(0.0001) #VIC without this, figure is not updated
   else:
     plt.pause(pause)
 
 
-def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0, figNum=0, titles=None):
+def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, figNum=0, titles=None):
   """Plot full domain outputs of model prediction, ground truth and their difference."""
   img1 = prepareImgPlot(data[0], maxAmp, log_min)
   img2 = prepareImgPlot(data[1], maxAmp, log_min)
@@ -100,6 +101,7 @@ def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0, fi
   # Proceed through timer or user input
   if pause == -1:
     plt.waitforbuttonpress()
+    plt.pause(0.0001) #VIC without this, figure is not updated
   else:
     plt.pause(pause)
 
