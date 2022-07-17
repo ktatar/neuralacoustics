@@ -5,8 +5,6 @@ from pathlib import Path
 from datetime import datetime # for current date time in name of model
 import socket # for hostname in name of model
 
-
-from neuralacoustics.model import FNO2d
 # to load dataset
 from neuralacoustics.DatasetManager import DatasetManager
 from neuralacoustics.utils import LpLoss
@@ -16,7 +14,7 @@ from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import count_params
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
-
+from networks.FNO2d import FNO2d
 from torch.utils.tensorboard import SummaryWriter
 
 # retrieve PRJ_ROOT

@@ -1,3 +1,4 @@
+from calendar import c
 import torch
 import numpy as np
 import matplotlib.pyplot as plt # to plot
@@ -63,11 +64,18 @@ def plot2Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
     plt.pause(pause)
 
 
-def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, figNum=0, titles=None):
+def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, figNum=0, titles=None, mic_x=-1, mic_y=-1):
   """Plot full domain outputs of model prediction, ground truth and their difference."""
   img1 = prepareImgPlot(data[0], maxAmp, log_min)
   img2 = prepareImgPlot(data[1], maxAmp, log_min)
   img3 = prepareImgPlot(data[2], maxAmp, log_min)
+
+  plot_waveform = mic_x >= 0 and mic_y >= 0
+  
+  # Double check the mic position is in bound
+  if plot_waveform:
+    if mic_x >= img1.shape[0] or mic_y >= img1.shape[1]:
+      raise AssertionError("mic_x/mic_y out of bound")
 
   if(figNum > 0):
     fig = plt.figure(figNum)
@@ -76,6 +84,17 @@ def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
 
   rows = 1
   columns = 3
+
+  if plot_waveform:
+    highlight_points = []
+    if mic_x > 0: highlight_points.append([mic_x - 1, mic_y])
+    if mic_x < img1.shape[0] - 1: highlight_points.append([mic_x + 1, mic_y])
+    if mic_y > 0: highlight_points.append([mic_x, mic_y - 1])
+    if mic_y < img1.shape[1] - 1: highlight_points.append([mic_x, mic_y + 1])
+
+    for pt in highlight_points:
+      img1[pt[0], pt[1]] = -1
+      img2[pt[0], pt[1]] = -1
   
   # First plot
   fig.add_subplot(rows, columns, 1)

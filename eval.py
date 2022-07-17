@@ -12,7 +12,8 @@ import torch
 from pathlib import Path
 from timeit import default_timer
 
-from neuralacoustics.model import FNO2d
+# to load model structure
+from networks.FNO2d import FNO2d
 # to load dataset
 from neuralacoustics.DatasetManager import DatasetManager
 # to plot data entries (specific series of domains)
@@ -39,7 +40,6 @@ pause_sec = config['evaluation'].getfloat('pause_sec')
 
 mic_x = config['evaluation'].getint('mic_x')
 mic_y = config['evaluation'].getint('mic_y')
-plot_waveform = mic_x >= 0 and mic_y >= 0 and timesteps >= 2
 
 dev = config['evaluation'].get('dev')
 seed = config['evaluation'].getint('seed')
@@ -84,9 +84,12 @@ u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry)
 # Get domain size
 u_shape = list(u.shape)
 S = u_shape[1]
+timesteps = u_shape[0] # reload timestep
 # Assume that all datasets have simulations spanning square domains
 assert(S == u_shape[2])
 
+# Set plot_waveform flag to true if mic position is valid and timesteps >= 2
+plot_waveform = mic_x >= 0 and mic_y >= 0 and u_shape[0] >= 2
 if plot_waveform:
     # Check validity of mic_x and mic_y
     if mic_x >= S or mic_y >= S:
@@ -167,7 +170,7 @@ with torch.no_grad():
         domains = torch.stack([prediction, label, prediction - label])
         titles = ['Prediction', 'Ground Truth', 'Diff']
         plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
-                    figNum=1, titles=titles)
+                    figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
 
         # auto-regressive
         features = torch.cat((features, prediction), -1)
