@@ -56,6 +56,9 @@ def plot2Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
   if titles != None:
     plt.title(titles[1])
 
+  if pause == 0:
+    pause = 0.00001 #VIC 0 stalls plot
+
   # Proceed through timer or user input
   if pause == -1:
     plt.waitforbuttonpress()
@@ -116,6 +119,9 @@ def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
   #plt.axis('off')
   if titles != None:
     plt.title(titles[2])
+
+  if pause == 0:
+    pause = 0.00001 #VIC 0 stalls plot
 
   # Proceed through timer or user input
   if pause == -1:

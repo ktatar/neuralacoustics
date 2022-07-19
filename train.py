@@ -194,7 +194,7 @@ num_workers=num_workers, worker_init_fn=seed_worker, generator=g) #VIC not sure 
 
 t2 = default_timer()
 
-print(f'\nDataset preprocessing finished, elapsed time: {t2-t1}s')
+print(f'\nDataset preprocessing finished, elapsed time: {t2-t1} s')
 print(f'Training input shape: {train_a.shape}, output shape: {train_u.shape}')    
 
 

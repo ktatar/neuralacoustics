@@ -78,7 +78,7 @@ g.manual_seed(seed)
 #---------------------------------------------------------------------
 # load entry from dataset [test set]
 
-dataset_manager = DatasetManager(dataset_name, dataset_dir)
+dataset_manager = DatasetManager(dataset_name, dataset_dir, False)
 u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry)
 
 # Get domain size
@@ -118,13 +118,13 @@ test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a,
                                           num_workers=num_workers,
                                           worker_init_fn=seed_worker,
                                           generator=g)
-print(f'Test input shape: {test_a.shape}, output shape: {test_u.shape}')
-
+#print(f'Test input shape: {test_a.shape}, output shape: {test_u.shape}')
 
 
 
 #---------------------------------------------------------------------
 # Load model
+print(f"Load model: {model_name}")
 
 # Use the last checkpoint if the provided checkpoint is not valid
 if not model_path.is_file():
@@ -132,6 +132,10 @@ if not model_path.is_file():
     checkpoints = [x.name for x in list(checkpoint_path.glob('*'))]
     checkpoints.sort()
     model_path = checkpoint_path.joinpath(checkpoints[-1])
+else :
+    print(f"\tcheckpoint: {checkpoint_name}")
+
+
 
 if dev == 'gpu' or 'cuda' in dev:
     assert(torch.cuda.is_available())
@@ -146,11 +150,21 @@ else:
 
 
 
+print('Evaluation parameters:')
+print(f'\tdataset name: {dataset_name}')
+print(f'\trequested entry: {entry}')
+print(f'\trequested timesteps: {timesteps}')
+print(f'\tmic_x: {mic_x}')
+print(f'\tmic_y: {mic_y}')
+print(f'\trandom seed: {seed}\n')
+
+
+
 #---------------------------------------------------------------------
 # model evaluation
 
 model.eval()
-print(f"Load model from path: {model_path}")
+
 
 # Start evaluation
 with torch.no_grad():
@@ -161,7 +175,7 @@ with torch.no_grad():
         t1 = default_timer()
         prediction = model(features)
         t2 = default_timer()
-        print(f'Inference step computation time: {t2 - t1}s')
+        print(f'Timestep {i} of {timesteps}, inference computation time: {t2 - t1}s')
 
         if plot_waveform:
             pred_waveform[i] = prediction[0, mic_x, mic_y, 0]

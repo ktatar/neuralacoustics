@@ -10,9 +10,10 @@ class DatasetManager:
     A class for storing information of a dataset and loading data from it.
     """
 
-    def __init__(self, dataset_name, dataset_root):
+    def __init__(self, dataset_name, dataset_root, verbose=True):
         """Initialize dataset configurations."""
-        print('Preparing dataset:', dataset_name)
+        if verbose:
+            print('Preparing dataset:', dataset_name)
 
         # Get dataset directory and config file
         self.dataset_dir = Path(dataset_root).joinpath(dataset_name)
