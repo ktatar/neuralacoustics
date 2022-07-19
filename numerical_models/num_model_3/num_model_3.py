@@ -15,6 +15,9 @@ rho = -1
 gamma = -1
 init_size_min = -1
 init_size_max = -1
+ex_x = -1
+ex_y = -1
+ex_size = -1
 
 
 # places random impuse randomly in the matrix passed as an argument (xi0)
@@ -36,6 +39,9 @@ def load(model_name, config_path, _w, _h):
     global gamma
     global init_size_min
     global init_size_max
+    global ex_x
+    global ex_y
+    global ex_size
 
     modelName = model_name
 
@@ -56,6 +62,10 @@ def load(model_name, config_path, _w, _h):
     mu = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
     rho = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; formally defined as rho = [c*ds/dt)]^2, with c=speed of sound in medium, ds=size of each grid point [same on x and y], dt=1/samplerate
     gamma = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
+    
+    ex_x = config['numerical_model_parameters'].getfloat('ex_x') # x value of excitation
+    ex_y = config['numerical_model_parameters'].getfloat('ex_y') # y value of excitation (maybe these should be ints?)
+    ex_size = config['numerical_model_parameters'].getfloat('ex_size') # amplitude value of excitation
    
     seed = config['numerical_model_parameters'].getfloat('seed') # pseudo random seed, for determinism
 
@@ -81,8 +91,31 @@ def load(model_name, config_path, _w, _h):
 
     return
 
+def run_indv(dev, dt, nsteps, b=1, disp=False, dispRate=1, pause=0):
 
-def run(dev, dt, nsteps, b, disp=False, dispRate=1, pause=0):
+    # set parameters
+    # propagation params, explained in solver
+    # potentially model can have different values across domain
+    _mu = torch.ones(1, h, w) * mu
+    _rho = torch.ones(1, h, w) * rho
+    _gamma = torch.ones(1, h, w) * gamma
+
+    #--------------------------------------------------------------
+    # initial condition
+    excite = torch.zeros(1, h-2, w-2, nsteps) 
+    # initial condition is first excitation (for individual run, only need one point)
+    #can specify size of impulse or have it be random:
+    excite[0, ex_x, ex_y, 0] = ex_size #places excitation (with a specified size) at specified point.
+    #excite[0, ex_x, ex_y, 0] = torch.randn(1) #places excitation (with a random size) at specified point.
+
+    #--------------------------------------------------------------
+    # run solver
+    sol, sol_t = solver.run(dev, dt, nsteps, 1, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
+
+    return [sol, sol_t]
+
+
+def run_batch(dev, dt, nsteps, b, disp=False, dispRate=1, pause=0):
 
     # set parameters
 
