@@ -57,11 +57,13 @@ model_path = Path(model_root).joinpath(model_name).joinpath('checkpoints').joinp
 model_ini_path = Path(model_root).joinpath(model_name).joinpath(model_name+'.ini')
 model_config = openConfig(model_ini_path, __file__)
 
-network_mode = model_config['training'].getint('network_modes')
-network_width = model_config['training'].getint('network_width')
 T_in = model_config['training'].getint('T_in')
 T_out = model_config['training'].getint('T_out')
 
+network_name = model_config['training'].get('network')
+network_params = {}
+for (k, v) in model_config.items('network_parameters'):
+    network_params[k] = int(v)
 
 # Determinism (https://pytorch.org/docs/stable/notes/randomness.html)
 torch.use_deterministic_algorithms(True)
@@ -140,11 +142,13 @@ else :
 if dev == 'gpu' or 'cuda' in dev:
     assert(torch.cuda.is_available())
     dev = torch.device('cuda')
-    model = FNO2d(network_mode, network_mode, network_width, T_in).cuda()
+    model = FNO2d(network_params['network_modes'], network_params['network_modes'],
+                  network_params['network_width'], network_params['T_in'], network_params['stacks_num']).cuda()
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
 else:
     dev = torch.device('cpu')
-    model = FNO2d(network_mode, network_mode, network_width, T_in)
+    model = FNO2d(network_params['network_modes'], network_params['network_modes'],
+                  network_params['network_width'], network_params['T_in'], network_params['stacks_num']).cuda()
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
 
 

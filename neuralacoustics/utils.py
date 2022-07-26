@@ -21,6 +21,7 @@ def getProjectRoot(file):
 
 def openConfig(config_path, caller_name):
     config = configparser.ConfigParser(allow_no_value=True)
+    config.optionxform = str # Avoid letter case problem
 
     try:
         with open(config_path) as f:

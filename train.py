@@ -57,10 +57,13 @@ win_limit = config['training'].getint('window_limit')
 permute = config['training'].getint('permute') 
 permute = bool(permute>0)
 
-# network parameters
-modes = config['training'].getint('network_modes')
-width = config['training'].getint('network_width')
-
+# network
+network_name = config['training'].get('network')
+network_config = None
+if network_name == 'FNO2D':
+    network_dir = Path(prj_root) / 'networks'
+    network_config_path = network_dir / 'FNO2D.ini'
+    network_config = openConfig(network_config_path, __file__)
 
 # training parameters
 batch_size = config['training'].getint('batch_size')
@@ -95,8 +98,8 @@ print(f'\trequested training data points: {n_train}')
 print(f'\trequested training test points: {n_test}')
 print(f'\tinput steps: {T_in}')
 print(f'\toutput steps: {T_out}')
-print(f'\tmodes: {modes}')
-print(f'\twidth: {width}')
+# print(f'\tmodes: {modes}')
+# print(f'\twidth: {width}')
 print(f'\tbatch size: {batch_size}')
 print(f'\tepochs: {epochs}')
 print(f'\tlearning_rate: {learning_rate}')
@@ -205,14 +208,17 @@ print(f'\nModel name: {model_name}')
 
 
 # in case of generic gpu or cuda explicitly, check if available
+modes = network_config['network_parameters'].getint('network_modes')
+width = network_config['network_parameters'].getint('network_width')
+stacks_num = network_config['network_parameters'].getint('stacks_num')
 if dev == 'gpu' or 'cuda' in dev:
   if torch.cuda.is_available():  
-    model = FNO2d(modes, modes, width, T_in).cuda()
+    model = FNO2d(modes, modes, width, T_in, stacks_num).cuda()
     dev  = torch.device('cuda')
     #print(torch.cuda.current_device())
     #print(torch.cuda.get_device_name(torch.cuda.current_device()))
 else:
-  model = FNO2d(modes, modes, width, T_in)
+  model = FNO2d(modes, modes, width, T_in, stacks_num)
   dev  = torch.device('cpu')
 
 print('Device:', dev)
@@ -402,7 +408,15 @@ config_model.add_section('training')
 for(each_key, each_val) in config.items('training'):
       config_model.set('training', each_key, each_val)
 
+# Add network detail
+config_model.add_section('network_params_details')
+for (k, v) in network_config.items('network_params_details'):
+    config_model.set('network_params_details', k, v)
 
+config_model.add_section('network_parameters')
+for (k, v) in network_config.items('network_parameters'):
+    config_model.set('network_parameters', k, v)
+config_model.set('network_parameters', 'T_in', T_in)
 
 
 # then retrieve all content of dataset config file
