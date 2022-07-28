@@ -134,7 +134,7 @@ def run(dev, b, samplerate, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, di
     # potentially model can have different values across domain (for now, model params only differ by batch, not across domain)
     _mu = torch.ones(b, h, w) 
     _rho = torch.ones(b, h, w)
-    _gamma = torch.ones(b, h, w) #should names be changed so that we can differentiate argument variables from global variables?
+    _gamma = torch.ones(b, h, w)
     
     for _b in range(b):
         _mu[_b, :,:] *= mu[_b]
