@@ -13,7 +13,7 @@ from pathlib import Path
 from timeit import default_timer
 
 # to load model structure
-from networks.FNO2d import FNO2d
+from networks.FNO2d.FNO2d import FNO2d
 # to load dataset
 from neuralacoustics.DatasetManager import DatasetManager
 # to plot data entries (specific series of domains)

@@ -14,7 +14,7 @@ from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import count_params
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
-from networks.FNO2d import FNO2d
+from networks.FNO2d.FNO2d import FNO2d
 from torch.utils.tensorboard import SummaryWriter
 
 # retrieve PRJ_ROOT
@@ -60,9 +60,9 @@ permute = bool(permute>0)
 # network
 network_name = config['training'].get('network')
 network_config = None
-if network_name == 'FNO2D':
-    network_dir = Path(prj_root) / 'networks'
-    network_config_path = network_dir / 'FNO2D.ini'
+if network_name == 'FNO2d':
+    network_dir = Path(prj_root) / 'networks' / network_name
+    network_config_path = network_dir / 'FNO2d.ini'
     network_config = openConfig(network_config_path, __file__)
 
 # training parameters

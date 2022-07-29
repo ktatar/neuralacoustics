@@ -18,3 +18,4 @@
 *.output
 *.error
 train_out
+.vscode
