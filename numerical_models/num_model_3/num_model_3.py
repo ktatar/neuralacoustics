@@ -19,11 +19,30 @@ ex_y = -1
 ex_amp = -1
 dt = -1
 
-def load_test(model_name, config_path):    
+def load():    
+    global modelName 
+    modelName = 'num_model_3' #sets model name
+
+    #does not read/assign any parameters, called by generator which will pass a new set of parameters in every run call.
+    #--------------------------------------------------------------
+
+    # load solver
+    # we want to load the package through potential subfolders
+    solver_dir_folders = Path(solver_dir.replace('PRJ_ROOT', '.')).parts
+
+    # create package structure by concatenating folders with '.'
+    packages_struct = solver_dir_folders[0]
+    for pkg in range(1,len(solver_dir_folders)):
+        packages_struct += '.'+solver_dir_folders[pkg] 
+    # load
+    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
+
+    return
+
+def load_test(config_path):    
     # to prevent python from declaring new local variables with the same names
     # only needed when content of variables is modified
     global solver 
-    global modelName
     global w
     global h
     global mu
@@ -36,11 +55,10 @@ def load_test(model_name, config_path):
     global ex_amp
     global dt
 
-    modelName = model_name
-
-     # get config file
-    config = openConfig(config_path, modelName) 
+    load() #loads solver, which sets modelName to num_model_3
     
+    # get config file
+    config = openConfig(config_path, modelName) 
 
     #--------------------------------------------------------------
 
@@ -63,66 +81,8 @@ def load_test(model_name, config_path):
     ex_amp = config['numerical_model_parameters'].getfloat('ex_amp') # amplitude value of excitation
     
     #--------------------------------------------------------------
-
-    # load solver
-    # we want to load the package through potential subfolders
-    solver_dir_folders = Path(solver_dir.replace('PRJ_ROOT', '.')).parts
-
-    # create package structure by concatenating folders with '.'
-    packages_struct = solver_dir_folders[0]
-    for pkg in range(1,len(solver_dir_folders)):
-        packages_struct += '.'+solver_dir_folders[pkg] 
-    # load
-    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
-
+    
     return
-
-def load(model_name, config_path):    
-    
-    modelName = model_name
-
-     # get config file
-    config = openConfig(config_path, modelName) 
-    
-    #does not read/assign any parameters, called by generator which will pass a new set of parameters in every run call.
-    #--------------------------------------------------------------
-
-    # load solver
-    # we want to load the package through potential subfolders
-    solver_dir_folders = Path(solver_dir.replace('PRJ_ROOT', '.')).parts
-
-    # create package structure by concatenating folders with '.'
-    packages_struct = solver_dir_folders[0]
-    for pkg in range(1,len(solver_dir_folders)):
-        packages_struct += '.'+solver_dir_folders[pkg] 
-    # load
-    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
-
-    return
-
-
-def run_test(dev, dispRate=1, pause=0):
-
-    # set parameters
-    # propagation params, explained in solver
-    # potentially model can have different values across domain
-    _mu = torch.ones(1, h, w) * mu
-    _rho = torch.ones(1, h, w) * rho
-    _gamma = torch.ones(1, h, w) * gamma
-
-    #--------------------------------------------------------------
-    # initial condition
-    excite = torch.zeros(1, h-2, w-2, nsteps) 
-    # initial condition is first excitation (for individual run, only need one point)
-    
-    excite[0, ex_x, ex_y, 0] = ex_amp #places excitation (with a specified size) at specified point.
-    
-    #--------------------------------------------------------------
-    # run solver (b set to 1, disp set to true)
-    sol, sol_t = solver.run(dev, dt, nsteps, 1, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), True, dispRate, pause)
-
-    return [sol, sol_t]
-
 
 def run(dev, b, samplerate, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=False, dispRate=1, pause=0):
     #function will be called by generator, all params passed at runtime (does not use global variables)
@@ -136,11 +96,11 @@ def run(dev, b, samplerate, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, di
     _rho = torch.ones(b, h, w)
     _gamma = torch.ones(b, h, w)
     
-    for _b in range(b):
-        _mu[_b, :,:] *= mu[_b]
-        _rho[_b, :,:] *= rho[_b]
-        _gamma[_b, :,:] *= gamma[_b] #works, but there's prob a better way to do this. Will come back and rework.
-    
+    # element-wise multiplication of tensor slice and vector
+    # adapted from here: https://discuss.pytorch.org/t/element-wise-multiplication-of-a-vector-and-a-matrix/56946
+    _mu = mu.view(-1, 1, 1).expand_as(_mu) * _mu
+    _rho = rho.view(-1, 1, 1).expand_as(_rho) * _rho
+    _gamma = gamma.view(-1, 1, 1).expand_as(_gamma) * _gamma
     
     #--------------------------------------------------------------
     # initial condition
@@ -152,6 +112,16 @@ def run(dev, b, samplerate, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, di
     sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
 
     return [sol, sol_t]
+
+def run_test(dev, dispRate=1, pause=0):
+    # set parameters
+    _b = 1
+    _disp = True
+    
+    #call run using those parameters, and return the result.
+    test_sol, test_sol_t = run(dev, _b, samplerate, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, _disp=False)
+    
+    return [test_sol, test_sol_t]
 
 
 def getSolverInfo():
