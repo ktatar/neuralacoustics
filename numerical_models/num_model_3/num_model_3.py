@@ -23,7 +23,7 @@ dt = -1
 nsteps = -1
 
 def load():    
-    
+    global solver
     #does not read/assign any parameters, 
     #called by generator which will pass a new set of parameters in every run call.
     
@@ -39,12 +39,11 @@ def load():
     # load
     solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
 
-    return solver
+    return
 
 def load_test(config_path):    
     # to prevent python from declaring new local variables with the same names
     # only needed when content of variables is modified
-    global solver 
     global solver_dir
     global solver_name
     global w
@@ -85,7 +84,7 @@ def load_test(config_path):
     ex_amp[0] = config['numerical_model_parameters'].getfloat('ex_amp') # amplitude value of excitation
     
     #--------------------------------------------------------------
-    solver = load()
+    load() #loads solver
     
     return
 
