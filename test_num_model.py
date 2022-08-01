@@ -7,6 +7,7 @@ from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 
+#most of this is lifted directly from the dataset_generator file
 
 # retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
@@ -18,7 +19,8 @@ prj_root = getProjectRoot(__file__)
 config = getConfigParser(prj_root, __file__) # we call this script from command line directly
 # hence __file__ is not a path, just the file name with extension
 
-# read params from config file
+# read params from config file 
+# uses numerical_model_test section instead of dataset_generation section
 
 
 # model
@@ -27,6 +29,9 @@ model_root = model_root_.replace('PRJ_ROOT', prj_root)
 model_root = Path(model_root)
 model_name_ = config['numerical_model_test'].get('numerical_model')
 model_dir = model_root.joinpath(model_name_) # model_dir = model_root/model_name_ -> it is folder, where model script and its config file reside
+
+print("Model name: ", model_name_)
+print("Model directory: ", model_dir) #added printout
 
 # model config file
 model_config_path = config['numerical_model_test'].get('numerical_model_config')
@@ -38,7 +43,7 @@ else:
   model_config_path = Path(model_config_path)
 
 
-pause_sec = config['numerical_model_test'].getint('pause_sec') #seconds to pause in between sim.
+pause_sec = config['numerical_model_test'].getfloat('pause_sec') #seconds to pause in between sim.
 
 #-------------------------------------------------------------------------------
 
@@ -74,4 +79,4 @@ print('Device:', dev)
 disp_rate = 1/1
 
 model.load_test(model_config_path)
-sol, _ = model.run_test(dev, disp_rate , pause_sec)
+sol, _ = model.run_test(dev, dispRate = disp_rate ,pause = pause_sec)
