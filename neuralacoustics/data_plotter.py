@@ -19,6 +19,8 @@ def plotDomain(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, 
   # plt.show()
 
   # Proceed through timer or user input
+  if pause == 0:
+    pause = 0.00001 #VIC 0 stalls plot
   if pause == -1:
     plt.pause(0.0001) #VIC without this, figure is not updated
   else:
