@@ -6,9 +6,7 @@ from neuralacoustics.utils import openConfig
 
 # to store values from load()
 solver = 0 # where to load solver
-solver_dir  = ''
-solver_name  = ''
-modelName = 'num_model_3'
+modelName = ''
 w = -1
 h = -1
 mu = torch.empty((1,))
@@ -22,11 +20,11 @@ ex_amp = torch.empty((1,))
 dt = -1
 nsteps = -1
 
-def load():    
+def load(solver_dir, solver_name):    
     global solver
-    #does not read/assign any parameters, 
-    #called by generator which will pass a new set of parameters in every run call.
-    
+    global modelName
+
+    modelName = Path(__file__).stem #extracts modeName from this filename, stores it in global variable
     #--------------------------------------------------------------
     # load solver
     # we want to load the package through potential subfolders
@@ -44,8 +42,6 @@ def load():
 def load_test(config_path):    
     # to prevent python from declaring new local variables with the same names
     # only needed when content of variables is modified
-    global solver_dir
-    global solver_name
     global w
     global h
     global mu
@@ -60,7 +56,8 @@ def load_test(config_path):
     global nsteps
     
     # get config file
-    config = openConfig(config_path, modelName) 
+    model_name = Path(__file__).stem #grabs model name from the filename, uses it to open the config file
+    config = openConfig(config_path, model_name) 
 
     #--------------------------------------------------------------
 
@@ -68,6 +65,7 @@ def load_test(config_path):
     # solver
     solver_dir = config['solver'].get('solver_dir')
     solver_name = config['solver'].get('solver_name')
+    load(solver_dir, solver_name) #loads solver
 
     # simulation parameters
     mu[0] = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
@@ -84,7 +82,6 @@ def load_test(config_path):
     ex_amp[0] = config['numerical_model_parameters'].getfloat('ex_amp') # amplitude value of excitation
     
     #--------------------------------------------------------------
-    load() #loads solver
     
     return
 
