@@ -60,10 +60,23 @@ model_config = openConfig(model_ini_path, __file__)
 T_in = model_config['training'].getint('T_in')
 T_out = model_config['training'].getint('T_out')
 
-network_name = model_config['training'].get('network')
-network_params = {}
-for (k, v) in model_config.items('network_parameters'):
-    network_params[k] = int(v)
+# Load network object
+network_name = model_config['training'].get('network_name')
+network_dir_ = model_config['training'].get('network_dir')
+network_dir = Path(network_dir_.replace('PRJ_ROOT', prj_root)) / network_name
+network_path = network_dir / (network_name + '.py')
+
+network_config_path = config['training'].get('network_config')
+if network_config_path == 'default' or network_config_path == '':
+    network_config_path = network_dir / (network_name + '.ini')
+else:
+    network_config_path = Path(network_config_path.replace('PRJ_ROOT', prj_root))
+
+# Load network
+network_path_folders = network_path.parts
+network_path_struct = '.'.join(network_path_folders)[:-3]
+network_mod = __import__(network_path_struct, fromlist=['*'])
+network = getattr(network_mod, network_name)
 
 # Determinism (https://pytorch.org/docs/stable/notes/randomness.html)
 torch.use_deterministic_algorithms(True)
@@ -142,13 +155,11 @@ else :
 if dev == 'gpu' or 'cuda' in dev:
     assert(torch.cuda.is_available())
     dev = torch.device('cuda')
-    model = FNO2d(network_params['network_modes'], network_params['network_modes'],
-                  network_params['network_width'], network_params['T_in'], network_params['stacks_num']).cuda()
+    model = network(network_config_path, T_in).cuda()
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
 else:
     dev = torch.device('cpu')
-    model = FNO2d(network_params['network_modes'], network_params['network_modes'],
-                  network_params['network_width'], network_params['T_in'], network_params['stacks_num']).cuda()
+    model = network(network_config_path, T_in)
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
 
 

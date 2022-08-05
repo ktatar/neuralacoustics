@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import operator
+from neuralacoustics.utils import openConfig
 
 import numpy as np
 #VIC this is the content of: https://github.com/zongyi-li/fourier_neural_operator/blob/master/fourier_2d_time.py
@@ -51,7 +52,7 @@ class SpectralConv2d_fast(nn.Module):
 
 class FNO2d(nn.Module):
     # WYNN-mod: Add stacks_num input argument
-    def __init__(self, modes1, modes2, width, t_in, stacks_num=4):
+    def __init__(self, config_path, t_in):
         super(FNO2d, self).__init__()
 
         """
@@ -67,9 +68,12 @@ class FNO2d(nn.Module):
         output shape: (batchsize, x=64, y=64, c=1)
         """
 
-        self.modes1 = modes1
-        self.modes2 = modes2
-        self.width = width
+        # Parse config file
+        network_config = openConfig(config_path, __file__)
+        self.modes1 = network_config['network_parameters'].getint('network_modes')
+        self.modes2 = network_config['network_parameters'].getint('network_modes')
+        self.width = network_config['network_parameters'].getint('network_width')
+        self.stacks_num = network_config['network_parameters'].getint('stacks_num')
         self.padding = 2 # pad the domain if input is non-periodic
         
         #VIC-mod t_in is passed as parameter now, so that we can decide the number of input time steps
@@ -79,10 +83,10 @@ class FNO2d(nn.Module):
 
         # WYNN-mod: A module list for stacking layers
         self.conv_list = nn.ModuleList([SpectralConv2d_fast(
-            self.width, self.width, self.modes1, self.modes2) for i in range(stacks_num)])
+            self.width, self.width, self.modes1, self.modes2) for i in range(self.stacks_num)])
         self.w_list = nn.ModuleList(
-            [nn.Conv2d(self.width, self.width, 1) for i in range(stacks_num)])
-        self.bn_list = nn.ModuleList([nn.BatchNorm2d(self.width) for i in range(stacks_num)])
+            [nn.Conv2d(self.width, self.width, 1) for i in range(self.stacks_num)])
+        self.bn_list = nn.ModuleList([nn.BatchNorm2d(self.width) for i in range(self.stacks_num)])
 
         self.fc1 = nn.Linear(self.width, 128)
         self.fc2 = nn.Linear(128, 1)

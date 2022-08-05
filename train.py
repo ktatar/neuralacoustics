@@ -14,7 +14,6 @@ from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import count_params
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
-from networks.FNO2d.FNO2d import FNO2d
 from torch.utils.tensorboard import SummaryWriter
 
 # retrieve PRJ_ROOT
@@ -58,12 +57,22 @@ permute = config['training'].getint('permute')
 permute = bool(permute>0)
 
 # network
-network_name = config['training'].get('network')
-network_config = None
-if network_name == 'FNO2d':
-    network_dir = Path(prj_root) / 'networks' / network_name
-    network_config_path = network_dir / 'FNO2d.ini'
-    network_config = openConfig(network_config_path, __file__)
+network_name = config['training'].get('network_name')
+network_dir_ = config['training'].get('network_dir')
+network_dir = Path(network_dir_.replace('PRJ_ROOT', prj_root)) / network_name
+network_path = network_dir / (network_name + '.py')
+
+network_config_path = config['training'].get('network_config')
+if network_config_path == 'default' or network_config_path == '':
+    network_config_path = network_dir / (network_name + '.ini')
+else:
+    network_config_path = Path(network_config_path.replace('PRJ_ROOT', prj_root))
+
+# Load network
+network_path_folders = network_path.parts
+network_path_struct = '.'.join(network_path_folders)[:-3]
+network_mod = __import__(network_path_struct, fromlist=['*'])
+network = getattr(network_mod, network_name)
 
 # training parameters
 batch_size = config['training'].getint('batch_size')
@@ -208,17 +217,14 @@ print(f'\nModel name: {model_name}')
 
 
 # in case of generic gpu or cuda explicitly, check if available
-modes = network_config['network_parameters'].getint('network_modes')
-width = network_config['network_parameters'].getint('network_width')
-stacks_num = network_config['network_parameters'].getint('stacks_num')
 if dev == 'gpu' or 'cuda' in dev:
   if torch.cuda.is_available():  
-    model = FNO2d(modes, modes, width, T_in, stacks_num).cuda()
+    model = network(network_config_path, T_in).cuda()
     dev  = torch.device('cuda')
     #print(torch.cuda.current_device())
     #print(torch.cuda.get_device_name(torch.cuda.current_device()))
 else:
-  model = FNO2d(modes, modes, width, T_in, stacks_num)
+  model = network(network_config_path, T_in)
   dev  = torch.device('cpu')
 
 print('Device:', dev)
@@ -409,6 +415,7 @@ for(each_key, each_val) in config.items('training'):
       config_model.set('training', each_key, each_val)
 
 # Add network detail
+network_config = openConfig(network_config_path, __file__)
 config_model.add_section('network_params_details')
 for (k, v) in network_config.items('network_params_details'):
     config_model.set('network_params_details', k, v)
