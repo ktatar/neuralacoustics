@@ -69,7 +69,6 @@ def load_generator(config_path, prj_root):
     #gamma = config['dataset_generation'].getfloat('gamma')
     # model
     # this is taken from the dataset_generator code, loads the model.
-    #inefficient to do this every function call, will need rework.
     model_root_ = numerical_model_dir
     model_name_ = numerical_model
     
@@ -103,21 +102,9 @@ def load_generator(config_path, prj_root):
 
 def generate_dataset():
     ex_x, ex_y, ex_amp, mu, rho, gamma = generate_rand_tensors(w, h, B)
-    print('ex_x: ', ex_x)
-    print('ex_y: ', ex_y)
-    print('ex_amp: ', ex_amp)
-    print('mu: ', mu)
-    print('rho: ', rho)
-    print('gamma: ', gamma)
-    
     model.load(solver_dir, solver_name)
     s, t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=True, dispRate=1, pause=1)
     
-    for batch in range(B):
-        for n in range(nsteps):
-            print('batch: ', batch)
-            print('n: ', n)
-            print(s[batch, :, :, n])#all batches, first step. excite works, repeatable. now check mu/rho/gamma work.
     return s, t
 
 def generate_rand_tensors(_w, _h, _B, _seed = 0):
