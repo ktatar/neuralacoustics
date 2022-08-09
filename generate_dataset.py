@@ -1,11 +1,3 @@
-import torch
-import configparser # to save config in new ini file
-import scipy.io # to save dataset
-from pathlib import Path # to properly handle paths and folders on every os
-from timeit import default_timer # to measure processing time
-from neuralacoustics.utils import getProjectRoot
-from neuralacoustics.utils import getConfigParser
-from neuralacoustics.utils import openConfig
 
 import torch
 import configparser # to save config in new ini file
