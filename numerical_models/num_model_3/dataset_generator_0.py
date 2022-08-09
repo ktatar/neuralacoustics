@@ -50,7 +50,7 @@ def load_generator(config_path, prj_root):
     B = config['dataset_generation'].getint('B')
     w = config['dataset_generation'].getint('w')
     h = config['dataset_generation'].getint('h')
-    seed = config['dataset_generation'].getint('h')
+    seed = config['dataset_generation'].getint('seed')
     nsteps = config['dataset_generation'].getint('nsteps')
     dt = 1.0 / config['dataset_generation'].getint('samplerate')
     dev = config['dataset_generation'].get('dev')
@@ -64,10 +64,33 @@ def load_generator(config_path, prj_root):
             print('dataset_generator: gpu not avaialable!')
             
     pause_sec = config['dataset_generation'].getfloat('pause_sec')
-    #mu = config['dataset_generation'].getfloat('mu')
-    #rho = config['dataset_generation'].getfloat('rho')
-    #gamma = config['dataset_generation'].getfloat('gamma')
-    # model
+    
+    load_num_model(prj_root)
+    
+    return
+
+
+def generate_dataset():
+    ex_x, ex_y, ex_amp, mu, rho, gamma = generate_rand_tensors(w, h, B)
+    model.load(solver_dir, solver_name)
+    s, t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=True, dispRate=1, pause=pause_sec)
+    
+    return s, t
+
+def generate_rand_tensors(_w, _h, _B, force_det = False, _seed = 0):
+    if force_det:
+        torch.manual_seed(_seed) #used to seed tensors.
+    rd_x = torch.randint(0, _w-2, (_B,)) 
+    rd_y = torch.randint(0, _h-2, (_B,))
+    rd_amp = torch.randn(_B)
+    rd_mu = torch.rand(_B) #these will prob need adjustment in order to match realistic values.
+    rd_rho = torch.rand(_B)
+    rd_gamma = torch.rand(_B)
+    return rd_x, rd_y, rd_amp, rd_mu, rd_rho, rd_gamma
+
+def load_num_model(prj_root):
+    global model
+    
     # this is taken from the dataset_generator code, loads the model.
     model_root_ = numerical_model_dir
     model_name_ = numerical_model
@@ -95,24 +118,5 @@ def load_generator(config_path, prj_root):
         packages_struct += '.'+model_path_folders[pkg] 
     # load 
     model = __import__(packages_struct + '.' + model_name_, fromlist=['*']) # model.path.model_name_ is model script [i.e., package]
-
     
     return
-
-
-def generate_dataset():
-    ex_x, ex_y, ex_amp, mu, rho, gamma = generate_rand_tensors(w, h, B)
-    model.load(solver_dir, solver_name)
-    s, t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=True, dispRate=1, pause=1)
-    
-    return s, t
-
-def generate_rand_tensors(_w, _h, _B, _seed = 0):
-    #torch.manual_seed(_seed) can be used to if you want the same tensors every time this is called.
-    rd_x = torch.randint(0, _w-2, (_B,)) 
-    rd_y = torch.randint(0, _h-2, (_B,))
-    rd_amp = torch.randn(_B)
-    rd_mu = torch.rand(_B) #these will prob need adjustment in order to match realistic values.
-    rd_rho = torch.rand(_B)
-    rd_gamma = torch.rand(_B)
-    return rd_x, rd_y, rd_amp, rd_mu, rd_rho, rd_gamma
