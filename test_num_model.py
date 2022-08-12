@@ -47,11 +47,6 @@ pause_sec = config['numerical_model_test'].getfloat('pause_sec') #seconds to pau
 
 #-------------------------------------------------------------------------------
 
-dev_ = config['dataset_generation'].get('dev') # cpu or gpu, keep original for dataset config
-dev = dev_
-
-#-------------------------------------------------------------------------------
-
 # load model
 # we want to load the package through potential subfolders
 # we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
@@ -63,6 +58,10 @@ for pkg in range(1,len(model_path_folders)):
     packages_struct += '.'+model_path_folders[pkg] 
 # load 
 model = __import__(packages_struct + '.' + model_name_, fromlist=['*']) # model.path.model_name_ is model script [i.e., package]
+
+#-------------------------------------------------------------------------------
+
+dev = config['dataset_generation'].get('dev') # cpu or gpu
 
 # in case of generic gpu or cuda explicitly, check if available
 if dev == 'gpu' or 'cuda' in dev:
@@ -76,7 +75,9 @@ if dev == 'gpu' or 'cuda' in dev:
 
 print('Device:', dev)
 
+#----------------------------------------------------------------------------
+
 disp_rate = 1/1
 
 model.load_test(model_config_path)
-sol, _ = model.run_test(dev, dispRate = disp_rate ,pause = pause_sec)
+model.run_test(dev, dispRate = disp_rate ,pause = pause_sec)
