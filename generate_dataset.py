@@ -1,4 +1,3 @@
-
 import torch
 import configparser # to save config in new ini file
 import scipy.io # to save dataset
@@ -22,36 +21,26 @@ config = getConfigParser(prj_root, __file__) # we call this script from command 
 
 # read params from config file
 
-# model (same code for now because generator script is in the same model script).
-model_root_ = config['dataset_generation'].get('numerical_model_dir') # keep original string for dataset config
-model_root = model_root_.replace('PRJ_ROOT', prj_root)
-model_root = Path(model_root)
-model_name_ = config['dataset_generation'].get('numerical_model')
-model_dir = model_root.joinpath(model_name_) # model_dir = model_root/model_name_ -> it is folder, where model script and its config file reside
+generator_name = config['dataset_generation'].get('generator_name') #name of generator file 
 
-generator_name = config['dataset_generation'].get('generator_name') #added to load generator script.
+generator_root_ = config['dataset_generation'].get('generator_dir') # generator_root_ variable only used for generator_config_path now.
+generator_root = generator_root_.replace('PRJ_ROOT', prj_root) 
+generator_root = Path(generator_root) #path for generator root(just the numerical model root for now)
 
-# model config file (tweaked so now it uses generator name)
-model_config_path = config['dataset_generation'].get('numerical_model_config')
-# default config has same name as model and is in same folder
-if model_config_path == 'default' or model_config_path == '':
-  model_config_path = model_dir.joinpath(generator_name +'.ini') # model_dir/model_name_.ini 
+generator_model = config['dataset_generation'].get('generator_model')# this is the numerical model used for dataset generation.
+
+generator_dir = generator_root.joinpath(generator_model) # model_dir = model_root/model_name_ -> it is folder, where model script and its config file reside
+#right now, generator file and model file are stored in same directory.
+
+# generator config file (basically just the model config file code with names changed.)
+generator_config_path = config['dataset_generation'].get('generator_config')
+
+# default config has same name as generator and is in same folder
+if generator_config_path == 'default' or generator_config_path == '':
+  generator_config_path = generator_dir.joinpath(generator_name +'.ini') # generator_dir/generator_name_.ini 
 else:
-  model_config_path = model_config_path.replace('PRJ_ROOT', prj_root)
-  model_config_path = Path(model_config_path)
-
-
-# chunks
-ch = config['dataset_generation'].getint('chunks') # num of chunks
-
-# dataset dir
-dataset_root_ = config['dataset_generation'].get('dataset_dir') # keep original string for dataset config
-dataset_root = dataset_root_.replace('PRJ_ROOT', prj_root)
-dataset_root = Path(dataset_root)
-
-dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
-
-
+  generator_config_path = generator_config_path.replace('PRJ_ROOT', prj_root)
+  generator_config_path = Path(generator_config_path)
 
 #-------------------------------------------------------------------------------
 # load model (generator)
@@ -59,21 +48,39 @@ dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simu
 
 # we want to load the package through potential subfolders
 # we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
-model_path_folders = Path(model_root_.replace('PRJ_ROOT', '.')).joinpath(model_name_).parts # also add folder with same name as model
+generator_path_folders = Path(generator_root_.replace('PRJ_ROOT', '.')).joinpath(generator_model).parts # also add folder with same name as model
+#should the above be replaced with just generator_root.joinpath(generator_model).parts? both seem to work
 
 # create package structure by concatenating folders with '.'
-packages_struct = model_path_folders[0]
-for pkg in range(1,len(model_path_folders)):
-    packages_struct += '.'+model_path_folders[pkg] 
-# load 
-generator = __import__(packages_struct + '.' + generator_name, fromlist=['*']) # model.path.model_name_ is model script [i.e., package]
+packages_struct = generator_path_folders[0]
+for pkg in range(1,len(generator_path_folders)):
+    packages_struct += '.'+generator_path_folders[pkg] 
+# load
+
+generator = __import__(packages_struct + '.' + generator_name, fromlist=['*']) # model.path.model_name_ is model script [i.e., package].
+
 
 #-------------------------------------------------------------------------------
-
-torch.use_deterministic_algorithms(True)
+torch.use_deterministic_algorithms(True) #enables determinism.
 torch.backends.cudnn.deterministic = True 
-#torch.manual_seed(0)#used if you want the same events on successive running of the scripts, but diff results when running the function the same time.
+#torch.manual_seed(0) #sets seed
 
-generator.load_generator(model_config_path, prj_root)
-generator.generate_dataset()
-generator.generate_dataset()
+#-------------------------------------------------------------------------------
+dev = config['dataset_generation'].get('dev') # cpu or gpu, keep original for dataset config
+
+# in case of generic gpu or cuda explicitly, check if available
+if dev == 'gpu' or 'cuda' in dev:
+  if torch.cuda.is_available():  
+    dev = torch.device('cuda')
+    #print(torch.cuda.current_device())
+    #print(torch.cuda.get_device_name(torch.cuda.current_device()))
+  else:  
+    dev = torch.device('cpu')
+    print('dataset_generator: gpu not available!')
+
+print('Device:', dev)
+
+#------------------------------------------------------------------------------
+
+generator.load_generator(generator_config_path, prj_root) #passing prj_root to maintain original code structure.
+generator.generate_dataset(dev) #generates dataset.
