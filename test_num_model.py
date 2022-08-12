@@ -42,9 +42,6 @@ else:
   model_config_path = model_config_path.replace('PRJ_ROOT', prj_root)
   model_config_path = Path(model_config_path)
 
-
-pause_sec = config['numerical_model_test'].getfloat('pause_sec') #seconds to pause in between sim.
-
 #-------------------------------------------------------------------------------
 
 # load model
@@ -78,6 +75,7 @@ print('Device:', dev)
 #----------------------------------------------------------------------------
 
 disp_rate = 1/1
+pause_sec = config['numerical_model_test'].getfloat('pause_sec') #seconds to pause in between sim.
 
 model.load_test(model_config_path)
 model.run_test(dev, dispRate = disp_rate ,pause = pause_sec)
