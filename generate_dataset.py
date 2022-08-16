@@ -26,6 +26,7 @@ generator_name = config['dataset_generation'].get('generator_name') #name of gen
 generator_dir_ = config['dataset_generation'].get('generator_dir')
 generator_dir = generator_dir_.replace('PRJ_ROOT', prj_root) 
 generator_dir = Path(generator_dir) #path for generator root
+generator_path = generator_dir.joinpath(generator_name + '.py')
 
 # generator config file
 generator_config_path = config['dataset_generation'].get('generator_config')
@@ -68,15 +69,11 @@ print('Device:', dev)
 
 # we want to load the package through potential subfolders
 # we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
-generator_path_folders = generator_dir.parts
-
+generator_path_folders = generator_path.parts
 # create package structure by concatenating folders with '.'
-packages_struct = generator_path_folders[0]
-for pkg in range(1,len(generator_path_folders)):
-    packages_struct += '.'+generator_path_folders[pkg] 
-# load
+packages_struct = '.'.join(generator_path_folders)[:-3] # append all parts and remove '.py' from file/package name
+generator = __import__(packages_struct, fromlist=['*']) #load
 
-generator = __import__(packages_struct + '.' + generator_name, fromlist=['*']) # model.path.model_name_ is model script [i.e., package].
 
 #-------------------------------------------------------------------------------
 num_of_batches, ch, rem = generator.load(generator_config_path, ch) #return number of batches, chunks, remainder, after loading
