@@ -58,19 +58,26 @@ permute = bool(permute>0)
 
 # network
 network_name = config['training'].get('network_name')
-network_dir_ = config['training'].get('network_dir')
-network_dir = Path(network_dir_.replace('PRJ_ROOT', prj_root)) / network_name
-network_path = network_dir / (network_name + '.py')
+#network_dir_ = config['training'].get('network_dir')
+#network_dir = Path(network_dir_.replace('PRJ_ROOT', prj_root)) / network_name
+#network_path = network_dir / (network_name + '.py')
+network_root = Path( config['training'].get('network_dir').replace('PRJ_ROOT', prj_root) )
+network_dir = network_root.joinpath(network_name)
+network_path = network_dir.joinpath(network_name+'.py')
 
 network_config_path = config['training'].get('network_config')
 if network_config_path == 'default' or network_config_path == '':
-    network_config_path = network_dir / (network_name + '.ini')
+    #network_config_path = network_dir / (network_name + '.ini')
+    network_config_path = network_dir.joinpath(network_name + '.ini')
 else:
     network_config_path = Path(network_config_path.replace('PRJ_ROOT', prj_root))
 
 # Load network
+# we want to load the package through potential subfolders
+# we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
 network_path_folders = network_path.parts
-network_path_struct = '.'.join(network_path_folders)[:-3]
+# create package structure by concatenating folders with '.'
+network_path_struct = '.'.join(network_path_folders)[:-3] # append all parts and remove '.py' from file/package name
 network_mod = __import__(network_path_struct, fromlist=['*'])
 network = getattr(network_mod, network_name)
 
@@ -223,6 +230,10 @@ if dev == 'gpu' or 'cuda' in dev:
     dev  = torch.device('cuda')
     #print(torch.cuda.current_device())
     #print(torch.cuda.get_device_name(torch.cuda.current_device()))
+  else:
+  	print('GPU/Cuda not available, switching to CPU...')
+  	model = network(network_config_path, T_in)
+  	dev  = torch.device('cpu')
 else:
   model = network(network_config_path, T_in)
   dev  = torch.device('cpu')
@@ -230,7 +241,7 @@ else:
 print('Device:', dev)
 
 
-print(f'Nunmber of model\'s parameters: {count_params(model)}')
+print(f'Number of model\'s parameters: {count_params(model)}')
 optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 # optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9) # this would need to be modified to handle complex arithmetic
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
