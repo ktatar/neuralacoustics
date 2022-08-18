@@ -57,7 +57,7 @@ def load(config_path, ch):
     #for quick visualization
     dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
     # seconds to pause between datapoints during visualization
-    pause = config['dataset_generation'].getfloat('pause_sec')
+    pause_sec = config['dataset_generation'].getfloat('pause_sec')
     # only used in dry run and it will be ignored in solver if <= 0
     
     #seed
