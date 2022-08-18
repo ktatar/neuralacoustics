@@ -65,7 +65,6 @@ print('Device:', dev)
 
 #------------------------------------------------------------------------------
 # load generator
-#will need to tweak if generator file is moved to a diff folder(currently in numerical_models/num_model_3)
 
 # we want to load the package through potential subfolders
 # we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
@@ -76,15 +75,12 @@ generator = __import__(packages_struct, fromlist=['*']) #load
 
 
 #-------------------------------------------------------------------------------
-num_of_batches, ch, rem = generator.load(generator_config_path, ch) #return number of batches, chunks, remainder, after loading
+num_of_batches, ch, rem, N, B, h, w, nsteps, dt = generator.load(generator_config_path, ch) #return number of batches, chunks, remainder, after loading
 
 batches_per_ch = num_of_batches//ch
-ch_size = batches_per_ch * generator.B # num of data points per chunk
+ch_size = batches_per_ch * B # num of data points per chunk
 
-if num_of_batches == -1:
-    generator.generate_datasetBatch(dev) #generate 1 batch with display on.
-    
-else:   
+if num_of_batches != -1:
     # compute name of dataset + create folder
     #----------------------------------------------------------------------------
     # count datasets in folder
@@ -123,14 +119,14 @@ else:
     
     #-------------------------------------------------------------------------------
         
-    time_duration = generator.nsteps * generator.dt
+    time_duration = nsteps * dt
     print('simulation duration: ', time_duration, 's')
     
     # initial conditions
     #a = torch.zeros(ch_size, h, w) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
     
     # solutions
-    u = torch.zeros(ch_size, generator.h, generator.h, generator.nsteps+1) # +1 becase initial condition is saved at beginning of solution time series!
+    u = torch.zeros(ch_size, h, w, nsteps+1) # +1 becase initial condition is saved at beginning of solution time series!
     
     
     ch_cnt = 0 #keeps track of # of chunks, datapoints during loop.
@@ -143,9 +139,9 @@ else:
         sol, sol_t = generator.generate_datasetBatch(dev) #generates dataset.
         
         # store
-        u[n_cnt:(n_cnt+generator.B),...] = sol # results
+        u[n_cnt:(n_cnt+B),...] = sol # results
 
-        n_cnt += generator.B
+        n_cnt += B
 
         # save some chunk, just in case...
         if (b+1) % batches_per_ch == 0: 
@@ -156,7 +152,7 @@ else:
           print( '\tchunk {}, {} dataset points  (up to batch {} of {})'.format(ch_cnt, ch_size, b+1, num_of_batches) )
           ch_cnt += 1
           # reset initial conditions, solutions and data point count
-          u = torch.zeros(ch_size, generator.h, generator.h, generator.nsteps+1) # +1 becase initial condition is repeated at beginning of solution time series!
+          u = torch.zeros(ch_size, h, w, nsteps+1) # +1 becase initial condition is repeated at beginning of solution time series!
           n_cnt = 0
           
         elif (b+1) == num_of_batches:
@@ -173,7 +169,7 @@ else:
 
     print(f'\nDataset {dataset_name} saved in:')
     print('\t', dataset_folder)
-    print(f'total number of data points: {actual_size} (out of {generator.N} requested)')
+    print(f'total number of data points: {actual_size} (out of {N} requested)')
     if ch == 1:
         print('in a single chunk')
     else:
@@ -183,3 +179,6 @@ else:
 
     simulation_duration = t2-t1
     print(f'\nElapsed time: {simulation_duration} s\n')
+
+else:
+    generator.generate_datasetBatch(dev) #generate 1 batch with display on.
