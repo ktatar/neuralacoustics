@@ -107,19 +107,18 @@ def load(config_path, ch):
         
     rem = 0 # is there any remainder?
     
-    return num_of_batches, ch, rem
+    return num_of_batches, ch, rem, N, B, h, w, nsteps, dt
 
 def generate_datasetBatch(dev):
-    if dryrun:
-        ex_x, ex_y, ex_amp, mu, rho, gamma = generate_rand_tensors(1) #create rand tensors for excitation and medium
-        model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp =True, dispRate = 1/1, pause = pause_sec)
-        #run with B = 1
-    else:
+    if dryrun == 0:
         ex_x, ex_y, ex_amp, mu, rho, gamma = generate_rand_tensors(B) 
         sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp)
-        return sol, sol_t
+    else:
+        ex_x, ex_y, ex_amp, mu, rho, gamma = generate_rand_tensors(1) #create rand tensors for excitation and medium
+        sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp =True, dispRate = 1/1, pause = pause_sec)
+        #run with B = 1
     
-    return
+    return sol, sol_t
 
 
 def generate_rand_tensors(_B):
