@@ -71,11 +71,11 @@ print('Device:', dev)
 generator_path_folders = generator_path.parts
 # create package structure by concatenating folders with '.'
 packages_struct = '.'.join(generator_path_folders)[:-3] # append all parts and remove '.py' from file/package name
-generator = __import__(packages_struct, fromlist=['*']) #load
+generator = __import__(packages_struct, fromlist=['load, generate_datasetBatch']) #load
 
 
 #-------------------------------------------------------------------------------
-num_of_batches, ch, rem, N, B, h, w, nsteps, dt = generator.load(generator_config_path, ch) #return number of batches, chunks, remainder, after loading
+num_of_batches, ch, rem, N, B, h, w, nsteps, dt = generator.load(generator_config_path, ch, prj_root) #return number of batches, chunks, remainder, after loading
 
 batches_per_ch = num_of_batches//ch
 ch_size = batches_per_ch * B # num of data points per chunk

@@ -9,39 +9,45 @@ solver = 0 # where to load solver
 modelName = ''
 w = -1
 h = -1
-mu = torch.empty((1,))
+mu = torch.empty((1,)) # declared as tensor to facilitate vector operations
 rho = torch.empty((1,))
 gamma = torch.empty((1,))
 init_size_min = -1
 init_size_max = -1
-ex_x = torch.empty((1,), dtype = torch.long)
-ex_y = torch.empty((1,), dtype = torch.long) #specified as longs in order to allow indexing
+ex_x = torch.empty((1,), dtype = torch.long) # declared as longs in order to allow indexing
+ex_y = torch.empty((1,), dtype = torch.long) 
 ex_amp = torch.empty((1,))
 dt = -1
 nsteps = -1
 
-def load(solver_dir, solver_name):    
-    global solver
+
+def load(config_path, prj_root):    
     global modelName
 
+    # get config file
     modelName = Path(__file__).stem #extracts modeName from this filename, stores it in global variable
-    #--------------------------------------------------------------
-    # load solver
-    # we want to load the package through potential subfolders
-    solver_dir_folders = Path(solver_dir.replace('PRJ_ROOT', '.')).parts
+    config = openConfig(config_path, modelName) 
 
-    # create package structure by concatenating folders with '.'
-    packages_struct = solver_dir_folders[0]
-    for pkg in range(1,len(solver_dir_folders)):
-        packages_struct += '.'+solver_dir_folders[pkg] 
+    #--------------------------------------------------------------
+
+    # read from config file
+    # solver
+    solver_dir = config['solver'].get('solver_dir')
+    solver_name = config['solver'].get('solver_name')
+    
+    # other params will be passed to run() at run-time
+
+    #--------------------------------------------------------------
+
     # load
-    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
+    _load(solver_dir, solver_name, prj_root) #loads solver
 
     return
 
-def load_test(config_path):    
+def load_test(config_path, prj_root):    
     # to prevent python from declaring new local variables with the same names
     # only needed when content of variables is modified
+    global modelName
     global w
     global h
     global mu
@@ -56,8 +62,8 @@ def load_test(config_path):
     global nsteps
     
     # get config file
-    model_name = Path(__file__).stem #grabs model name from the filename, uses it to open the config file
-    config = openConfig(config_path, model_name) 
+    modelName = Path(__file__).stem #extracts modeName from this filename, stores it in global variable
+    config = openConfig(config_path, modelName) 
 
     #--------------------------------------------------------------
 
@@ -65,9 +71,8 @@ def load_test(config_path):
     # solver
     solver_dir = config['solver'].get('solver_dir')
     solver_name = config['solver'].get('solver_name')
-    load(solver_dir, solver_name) #loads solver
 
-    # simulation parameters
+    #parses all simulation parameters
     mu[0] = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
     rho[0] = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; formally defined as rho = [c*ds/dt)]^2, with c=speed of sound in medium, ds=size of each grid point [same on x and y], dt=1/samplerate
     gamma[0] = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
@@ -82,8 +87,27 @@ def load_test(config_path):
     ex_amp[0] = config['numerical_model_parameters'].getfloat('ex_amp') # amplitude value of excitation
     
     #--------------------------------------------------------------
+
+    # load
+    _load(solver_dir, solver_name, prj_root) #loads solver
     
     return
+
+def _load(solver_dir, solver_name, prj_root):    
+    global solver
+    global modelName
+
+    #--------------------------------------------------------------
+    # load solver
+    # we want to load the package through potential subfolders
+    solver_dir_folders = Path(solver_dir.replace('PRJ_ROOT', prj_root)).joinpath(solver_name).parts # create full path [with no file extension] and get folders and file name
+
+    # create package structure by concatenating folders with '.'
+    packages_struct = '.'.join(solver_dir_folders)[:] # append all parts
+    # load
+    solver = __import__(packages_struct, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
+
+    return    
 
 def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=False, dispRate=1, pause=0):
     #function will be called by generator, all params passed at runtime (does not use global variables)

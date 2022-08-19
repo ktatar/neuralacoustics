@@ -29,6 +29,7 @@ model_root = model_root_.replace('PRJ_ROOT', prj_root)
 model_root = Path(model_root)
 model_name_ = config['numerical_model_test'].get('numerical_model')
 model_dir = model_root.joinpath(model_name_) # model_dir = model_root/model_name_ -> it is folder, where model script and its config file reside
+model_path =  model_dir.joinpath(model_name_+'.py') # actual path to file/model
 
 print("Model name: ", model_name_)
 print("Model directory: ", model_dir) #added printout
@@ -46,15 +47,11 @@ else:
 
 # load model
 # we want to load the package through potential subfolders
-# we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
-model_path_folders = Path(model_root_.replace('PRJ_ROOT', '.')).joinpath(model_name_).parts # also add folder with same name as model
+model_path_folders =  model_path.parts # creates full paths and gets folders
+packages_struct = '.'.join(model_path_folders)[:-3] # append all parts and remove '.py' from file/package name
 
-# create package structure by concatenating folders with '.'
-packages_struct = model_path_folders[0]
-for pkg in range(1,len(model_path_folders)):
-    packages_struct += '.'+model_path_folders[pkg] 
-# load 
-model = __import__(packages_struct + '.' + model_name_, fromlist=['*']) # model.path.model_name_ is model script [i.e., package]
+# import 
+model = __import__(packages_struct, fromlist=['load_test', 'run_test']) # model.path.model_name_ is model script [i.e., package]
 
 #-------------------------------------------------------------------------------
 
@@ -77,5 +74,5 @@ print('Device:', dev)
 disp_rate = 1/1
 pause_sec = config['numerical_model_test'].getfloat('pause_sec') #seconds to pause in between sim.
 
-model.load_test(model_config_path)
+model.load_test(model_config_path, prj_root)
 model.run_test(dev, dispRate = disp_rate ,pause = pause_sec)
