@@ -18,11 +18,12 @@ rho = torch.empty((1,))
 gamma = torch.empty((1,))
 seed = -1
 nsteps = -1
+dryrun = -1
 dt = -1
 pause_sec = -1
 model = 0
 
-def load(config_path, ch, prj_root):
+def load(config_path, ch, _dryrun, prj_root):
     # in same style as load_test, this function writes the config variables to global variables.
     global numerical_model_name 
     global numerical_model_dir 
@@ -69,7 +70,7 @@ def load(config_path, ch, prj_root):
     B = config['dataset_generator_parameters'].getint('B') # batch size
     
     #for quick visualization
-    dryrun = config['dataset_generator_parameters'].getint('dryrun') # visualize a single simulation run or save full dataset
+    dryrun = _dryrun
     # seconds to pause between datapoints during visualization
     pause_sec = config['dataset_generator_parameters'].getfloat('pause_sec')
     # only used in dry run and it will be ignored in solver if <= 0
@@ -123,7 +124,7 @@ def load(config_path, ch, prj_root):
         
     rem = 0 # is there any remainder?
     
-    return num_of_batches, ch, rem, N, B, h, w, nsteps, dt
+    return num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path
 
 def generate_datasetBatch(dev):
     if dryrun == 0:
@@ -140,3 +141,6 @@ def generate_randImpulse_tensors(_B):
     rd_y = torch.randint(0, h-2, (_B,))
     rd_amp = torch.randn(_B)
     return rd_x, rd_y, rd_amp
+
+def getSolverInfoFromModel():
+    return model.getSolverInfo()
