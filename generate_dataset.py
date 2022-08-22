@@ -23,7 +23,7 @@ config = getConfigParser(prj_root, __file__) # we call this script from command 
 
 generator_name = config['dataset_generation'].get('generator_name') #name of generator file 
 
-generator_dir_ = config['dataset_generation'].get('generator_dir')
+generator_dir_ = config['dataset_generation'].get('generator_dir') #keep original string
 generator_dir = generator_dir_.replace('PRJ_ROOT', prj_root) 
 generator_dir = Path(generator_dir) #path for generator root
 generator_path = generator_dir.joinpath(generator_name + '.py')
@@ -42,12 +42,15 @@ else:
 ch = config['dataset_generation'].getint('chunks') # num of chunks
 
 # dataset dir
-dataset_dir_ = config['dataset_generation'].get('dataset_dir') #where to save files.
-dataset_dir = dataset_dir_.replace('PRJ_ROOT', prj_root)
+dataset_dir_ = config['dataset_generation'].get('dataset_dir') #keep original string
+dataset_dir = dataset_dir_.replace('PRJ_ROOT', prj_root) #where to save files.
 
 #device
 dev_ = config['dataset_generation'].get('dev') # cpu or gpu, keep original for dataset config
 dev = dev_
+
+#for quick visualization
+dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
 
 #-------------------------------------------------------------------------------------
 
@@ -71,11 +74,11 @@ print('Device:', dev)
 generator_path_folders = generator_path.parts
 # create package structure by concatenating folders with '.'
 packages_struct = '.'.join(generator_path_folders)[:-3] # append all parts and remove '.py' from file/package name
-generator = __import__(packages_struct, fromlist=['load, generate_datasetBatch']) #load
+generator = __import__(packages_struct, fromlist=['load, generate_datasetBatch, getSolverInfoFromModel']) #load
 
 
 #-------------------------------------------------------------------------------
-num_of_batches, ch, rem, N, B, h, w, nsteps, dt = generator.load(generator_config_path, ch, prj_root) #return number of batches, chunks, remainder, after loading
+num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path = generator.load(generator_config_path, ch, dryrun, prj_root) #return number of batches, chunks, remainder, after loading
 
 batches_per_ch = num_of_batches//ch
 ch_size = batches_per_ch * B # num of data points per chunk
@@ -179,6 +182,80 @@ if num_of_batches != -1:
 
     simulation_duration = t2-t1
     print(f'\nElapsed time: {simulation_duration} s\n')
+    # ------------------------------------------------------------------------------------------------
+
+    # save relevant bits from general config file + extra info from model config file into a new dataset config file (log)
+
+    # create empty config file
+    config = configparser.RawConfigParser()
+    config.optionxform = str # otherwise raw config parser converts all entries to lower case letters
+
+    # fill it with dataset details
+    config.add_section('dataset_details')
+    config.set('dataset_details', 'name', dataset_name)
+    config.set('dataset_details', 'actual_size', actual_size)
+    config.set('dataset_details', 'simulated_time_s', time_duration)
+    config.set('dataset_details', 'simulation_duration_s', simulation_duration)
+    config.set('dataset_details', 'chunk_size', ch_size)
+    config.set('dataset_details', 'remainder_size', rem_size)
+    
+    
+    config.add_section('dataset_generation')
+    config.set('dataset_generation', 'generator_name', generator_name)
+    config.set('dataset_generation', 'generator_dir', generator_dir_)
+    config.set('dataset_generation', 'dev', dev_)
+    config.set('dataset_generation', 'chunks', ch)
+    config.set('dataset_generation', 'dataset_dir', dataset_dir_)
+    config.set('dataset_generation', 'dryrun', dryrun)
+
+    # the model config file is the current config file
+    # by doing so, dataset too can be re-built using this config file
+    dataset_config_path = Path(dataset_dir_).joinpath(dataset_name) # up to dataset folder, with PRJ_ROOT var
+    dataset_config_name = dataset_name+'.ini' # same name as dataset
+    dataset_config_path = dataset_config_path.joinpath(dataset_config_name) # add file name
+    dataset_config_path = str(dataset_config_path)
+    config.set('dataset_generation', 'generator_config', dataset_config_path)
+
+    # then retrieve generator and solver details from generator config file
+    config_gen = openConfig(generator_config_path, __file__)
+
+    # extract relevant bits and add them to new dataset config file
+    config.add_section('dataset_generator_details')
+    for(each_key, each_val) in config_gen.items('dataset_generator_details'):
+        config.set('dataset_generator_details', each_key, each_val)
+    
+    config.add_section('generator_params_details')
+    for(each_key, each_val) in config_gen.items('generator_params_details'):
+        config.set('generator_params_details', each_key, each_val)
+        
+    config.add_section('dataset_generator_parameters')
+    for(each_key, each_val) in config_gen.items('dataset_generator_parameters'):
+        config.set('dataset_generator_parameters', each_key, each_val)
+
+    config.add_section('numerical_model_parameters')
+    for(each_key, each_val) in config_gen.items('numerical_model_parameters'):
+        config.set('numerical_model_parameters', each_key, each_val)        
+    
+    
+    #retrieve model and solver details from model config file
+    config_model = openConfig(num_model_config_path, __file__)
+    
+    config.add_section('numerical_model_details')
+    for(each_key, each_val) in config_model.items('numerical_model_details'):
+        config.set('numerical_model_details', each_key, each_val)
+    
+
+    config.add_section('solver')
+    for(each_key, each_val) in config_model.items('solver'): #solver name & directory from model config file
+        config.set('solver', each_key, each_val)
+    for(each_key, each_val) in generator.getSolverInfoFromModel().items(): #solver description from generator
+        config.set('solver', each_key, each_val)
+
+    # where to write it
+    config_path = dataset_folder.joinpath(dataset_config_name) 
+    # write
+    with open(config_path, 'w') as configfile:
+        config.write(configfile)
 
 else:
     generator.generate_datasetBatch(dev) #generate 1 batch with display on.
