@@ -21,6 +21,7 @@ def getProjectRoot(file):
 
 def openConfig(config_path, caller_name):
     config = configparser.ConfigParser(allow_no_value=True)
+    config.optionxform = str # otherwise config parser converts all entries to lower case letters
 
     try:
         with open(config_path) as f:
