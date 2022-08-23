@@ -103,7 +103,8 @@ class FNO2d(nn.Module):
             x1 = self.conv_list[i](x)
             x2 = self.w_list[i](x)
             x = x1 + x2
-            x = F.gelu(x)
+            if i != len(self.conv_list) - 1:
+                x = F.gelu(x)
 
         # x = x[..., :-self.padding, :-self.padding] # pad the domain if input is non-periodic
         x = x.permute(0, 2, 3, 1)
