@@ -16,7 +16,7 @@ prj_root = getProjectRoot(__file__)
 # simulation parameters
 
 # get config file
-config = getConfigParser(prj_root, __file__) # we call this script from command line directly
+config, config_path = getConfigParser(prj_root, __file__) # we call this script from command line directly
 # hence __file__ is not a path, just the file name with extension
 
 # read params from config file 
@@ -24,21 +24,19 @@ config = getConfigParser(prj_root, __file__) # we call this script from command 
 
 
 # model
-model_root_ = config['numerical_model_test'].get('numerical_model_dir') # keep original string for dataset config
-model_root = model_root_.replace('PRJ_ROOT', prj_root)
-model_root = Path(model_root)
-model_name_ = config['numerical_model_test'].get('numerical_model')
-model_dir = model_root.joinpath(model_name_) # model_dir = model_root/model_name_ -> it is folder, where model script and its config file reside
-model_path =  model_dir.joinpath(model_name_+'.py') # actual path to file/model
+numerical_model_ = config['numerical_model_test'].get('numerical_model') # keep original string for dataset config
+numerical_model_name = Path(numerical_model_).parts[-1]
 
-print("Model name: ", model_name_)
-print("Model directory: ", model_dir) #added printout
+print("Model name: ", numerical_model_name)
+print("Model directory: ", numerical_model_) #added printout
+
+model_path =  Path(numerical_model_.replace('PRJ_ROOT', prj_root)).joinpath(numerical_model_name+'.py') # actual path to file/model
 
 # model config file
 model_config_path = config['numerical_model_test'].get('numerical_model_config')
 # default config has same name as model and is in same folder
 if model_config_path == 'default' or model_config_path == '':
-  model_config_path = model_dir.joinpath(model_name_+'.ini') # model_dir/model_name_.ini 
+  model_config_path = Path(numerical_model_.replace('PRJ_ROOT', prj_root)).joinpath(numerical_model_name+'.ini') # model_dir/model_name_.ini 
 else:
   model_config_path = model_config_path.replace('PRJ_ROOT', prj_root)
   model_config_path = Path(model_config_path)
