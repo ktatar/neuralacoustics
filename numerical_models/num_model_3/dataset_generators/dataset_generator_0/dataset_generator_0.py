@@ -5,10 +5,6 @@ from pathlib import Path # to properly handle paths and folders on every os
 from timeit import default_timer # to measure processing time
 from neuralacoustics.utils import openConfig
 
-numerical_model_name = ''
-numerical_model_dir = ''
-solver_dir = ''
-solver_name = ''
 N = -1
 B = -1
 w = -1
@@ -23,12 +19,8 @@ dt = -1
 pause_sec = -1
 model = 0
 
-def load(config_path, ch, _dryrun, prj_root):
+def load(config_path, ch, prj_root):
     # in same style as load_test, this function writes the config variables to global variables.
-    global numerical_model_name 
-    global numerical_model_dir 
-    global solver_dir
-    global solver_name 
     global N 
     global B 
     global w 
@@ -50,27 +42,24 @@ def load(config_path, ch, _dryrun, prj_root):
     #parameters
     
     #model
-    numerical_model_name = config['dataset_generator_parameters'].get('numerical_model') #name of num_model
-    numerical_model_dir = config['dataset_generator_parameters'].get('numerical_model_dir') # root directory of num_model
-    numerical_model_dir = Path(numerical_model_dir.replace('PRJ_ROOT', prj_root)).joinpath(numerical_model_name) # from root, to actual dir -> ./model_dir/model_name/
-    numerical_model_path = numerical_model_dir.joinpath(numerical_model_name +'.py') # complete path to file/model
+    num_model = config['dataset_generator_parameters'].get('numerical_model') #path of num_model
+    num_model_name = Path(num_model).parts[-1] 
+    
+    num_model_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.py') # complete path to file/model
 
-    # generator config file
+    #model config file
     num_model_config_path = config['dataset_generator_parameters'].get('numerical_model_config')
 
     # default config has same name as generator and is in same folder
     if num_model_config_path == 'default' or num_model_config_path == '':
-        num_model_config_path = numerical_model_dir.joinpath(numerical_model_name +'.ini') # model_dir/model_name/model_name.ini     
+        num_model_config_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.ini') # model_dir/model_name/model_name.ini
     else:
-        num_model_config_path = num_model_config_path.replace('PRJ_ROOT', prj_root)
-        num_model_config_path = Path(num_model_config_path)
+        num_model_config_path = config_path
 
     # dataset size
     N = config['dataset_generator_parameters'].getint('N') # num of dataset points
     B = config['dataset_generator_parameters'].getint('B') # batch size
     
-    #for quick visualization
-    dryrun = _dryrun
     # seconds to pause between datapoints during visualization
     pause_sec = config['dataset_generator_parameters'].getfloat('pause_sec')
     # only used in dry run and it will be ignored in solver if <= 0
@@ -78,8 +67,6 @@ def load(config_path, ch, _dryrun, prj_root):
     #seed
     seed = config['dataset_generator_parameters'].getint('seed') #for determinism.
     
-
-
     # domain size
     w = config['numerical_model_parameters'].getint('w') # domain width [cells]
     h = config['numerical_model_parameters'].getint('h') # domain height[cells]
@@ -95,7 +82,7 @@ def load(config_path, ch, _dryrun, prj_root):
 
     #------------------------------------------------------------------------------------------------------------------------------------
     #loads model    
-    model_path_folders = numerical_model_path.parts
+    model_path_folders = num_model_path.parts
     # create package structure by concatenating folders with '.'
     packages_struct = '.'.join(model_path_folders)[:-3] # append all parts and remove '.py' from file/package name
     
@@ -119,14 +106,11 @@ def load(config_path, ch, _dryrun, prj_root):
     if ch == 0: # always at least one chunk!
       ch = 1
         
-    if dryrun:
-        num_of_batches = -1
-        
     rem = 0 # is there any remainder?
     
     return num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path
 
-def generate_datasetBatch(dev):
+def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
         ex_x, ex_y, ex_amp = generate_randImpulse_tensors(B) 
         sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp)
