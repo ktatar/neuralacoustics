@@ -16,27 +16,25 @@ prj_root = getProjectRoot(__file__)
 # simulation parameters
 
 # get config file
-config = getConfigParser(prj_root, __file__) # we call this script from command line directly
+config, config_path = getConfigParser(prj_root, __file__) # we call this script from command line directly
 # hence __file__ is not a path, just the file name with extension
 
 # read params from config file
 
-generator_name = config['dataset_generation'].get('generator_name') #name of generator file 
+# read params from config file
+generator_ = config['dataset_generation'].get('dataset_generator') #path to the generator folder
+generator_name = Path(generator_).parts[-1] #generator will be in folder with the same name!
 
-generator_dir_ = config['dataset_generation'].get('generator_dir') #keep original string
-generator_dir = generator_dir_.replace('PRJ_ROOT', prj_root) 
-generator_dir = Path(generator_dir) #path for generator root
-generator_path = generator_dir.joinpath(generator_name + '.py')
+generator_path = Path(generator_.replace('PRJ_ROOT', prj_root)).joinpath(generator_name + '.py') 
 
 # generator config file
 generator_config_path = config['dataset_generation'].get('generator_config')
 
 # default config has same name as generator and is in same folder
 if generator_config_path == 'default' or generator_config_path == '':
-  generator_config_path = generator_dir.joinpath(generator_name +'.ini') # generator_dir/generator_name_.ini 
+  generator_config_path = Path(generator_.replace('PRJ_ROOT', prj_root)).joinpath(generator_name +'.ini') # generator_dir/generator_name_.ini 
 else:
-  generator_config_path = generator_config_path.replace('PRJ_ROOT', prj_root)
-  generator_config_path = Path(generator_config_path)
+  generator_config_path = Path(config_path.replace('PRJ_ROOT', prj_root)) #sets the generator config file to the one passed from the command line.
 
 # chunks
 ch = config['dataset_generation'].getint('chunks') # num of chunks
@@ -78,12 +76,12 @@ generator = __import__(packages_struct, fromlist=['load, generate_datasetBatch, 
 
 
 #-------------------------------------------------------------------------------
-num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path = generator.load(generator_config_path, ch, dryrun, prj_root) #return number of batches, chunks, remainder, after loading
+num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path = generator.load(generator_config_path, ch, prj_root) #return number of batches, chunks, remainder, after loading
 
 batches_per_ch = num_of_batches//ch
 ch_size = batches_per_ch * B # num of data points per chunk
 
-if num_of_batches != -1:
+if dryrun == 0:
     # compute name of dataset + create folder
     #----------------------------------------------------------------------------
     # count datasets in folder
@@ -139,7 +137,7 @@ if num_of_batches != -1:
     for b in range(num_of_batches):
 
         # compute all steps in full batch
-        sol, sol_t = generator.generate_datasetBatch(dev) #generates dataset.
+        sol, sol_t = generator.generate_datasetBatch(dev, dryrun) #generates dataset.
         
         # store
         u[n_cnt:(n_cnt+B),...] = sol # results
@@ -201,8 +199,7 @@ if num_of_batches != -1:
     
     
     config.add_section('dataset_generation')
-    config.set('dataset_generation', 'generator_name', generator_name)
-    config.set('dataset_generation', 'generator_dir', generator_dir_)
+    config.set('dataset_generation', 'dataset_generator', generator_)
     config.set('dataset_generation', 'dev', dev_)
     config.set('dataset_generation', 'chunks', ch)
     config.set('dataset_generation', 'dataset_dir', dataset_dir_)
@@ -210,11 +207,7 @@ if num_of_batches != -1:
 
     # the model config file is the current config file
     # by doing so, dataset too can be re-built using this config file
-    dataset_config_path = Path(dataset_dir_).joinpath(dataset_name) # up to dataset folder, with PRJ_ROOT var
-    dataset_config_name = dataset_name+'.ini' # same name as dataset
-    dataset_config_path = dataset_config_path.joinpath(dataset_config_name) # add file name
-    dataset_config_path = str(dataset_config_path)
-    config.set('dataset_generation', 'generator_config', dataset_config_path)
+    config.set('dataset_generation', 'generator_config', 'this_file')
 
     # then retrieve generator and solver details from generator config file
     config_gen = openConfig(generator_config_path, __file__)
@@ -231,11 +224,11 @@ if num_of_batches != -1:
     config.add_section('dataset_generator_parameters')
     for(each_key, each_val) in config_gen.items('dataset_generator_parameters'):
         config.set('dataset_generator_parameters', each_key, each_val)
+    config.set('dataset_generator_parameters', 'numerical_model_config', 'this_file')
 
     config.add_section('numerical_model_parameters')
     for(each_key, each_val) in config_gen.items('numerical_model_parameters'):
         config.set('numerical_model_parameters', each_key, each_val)        
-    
     
     #retrieve model and solver details from model config file
     config_model = openConfig(num_model_config_path, __file__)
@@ -243,8 +236,7 @@ if num_of_batches != -1:
     config.add_section('numerical_model_details')
     for(each_key, each_val) in config_model.items('numerical_model_details'):
         config.set('numerical_model_details', each_key, each_val)
-    
-
+   
     config.add_section('solver')
     for(each_key, each_val) in config_model.items('solver'): #solver name & directory from model config file
         config.set('solver', each_key, each_val)
@@ -252,10 +244,10 @@ if num_of_batches != -1:
         config.set('solver', each_key, each_val)
 
     # where to write it
-    config_path = dataset_folder.joinpath(dataset_config_name) 
+    dataset_config_path = dataset_folder.joinpath(dataset_name+'.ini') 
     # write
-    with open(config_path, 'w') as configfile:
+    with open(dataset_config_path, 'w') as configfile:
         config.write(configfile)
 
 else:
-    generator.generate_datasetBatch(dev) #generate 1 batch with display on.
+    generator.generate_datasetBatch(dev, dryrun) #generate 1 batch with display on.
