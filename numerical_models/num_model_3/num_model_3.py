@@ -31,16 +31,14 @@ def load(config_path, prj_root):
     #--------------------------------------------------------------
 
     # read from config file
-    # solver
-    solver_dir = config['solver'].get('solver_dir')
-    solver_name = config['solver'].get('solver_name')
+    solver = config['solver'].get('solver')#solver path
     
     # other params will be passed to run() at run-time
 
     #--------------------------------------------------------------
 
     # load
-    _load(solver_dir, solver_name, prj_root) #loads solver
+    _load(solver, prj_root) #loads solver
 
     return
 
@@ -69,8 +67,7 @@ def load_test(config_path, prj_root):
 
     # read from config file
     # solver
-    solver_dir = config['solver'].get('solver_dir')
-    solver_name = config['solver'].get('solver_name')
+    solver_path = config['solver'].get('solver')
 
     #parses all simulation parameters
     mu[0] = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
@@ -89,19 +86,18 @@ def load_test(config_path, prj_root):
     #--------------------------------------------------------------
 
     # load
-    _load(solver_dir, solver_name, prj_root) #loads solver
+    _load(solver_path, prj_root) #loads solver
     
     return
 
-def _load(solver_dir, solver_name, prj_root):    
+def _load(solver_path, prj_root):    
     global solver
-    global modelName
 
     #--------------------------------------------------------------
     # load solver
     # we want to load the package through potential subfolders
-    solver_dir_folders = Path(solver_dir.replace('PRJ_ROOT', prj_root)).joinpath(solver_name).parts # create full path [with no file extension] and get folders and file name
-
+    solver_dir_folders = Path(solver_path.replace('PRJ_ROOT', prj_root)).parts # create full path [with no file extension] and get folders and file name
+    
     # create package structure by concatenating folders with '.'
     packages_struct = '.'.join(solver_dir_folders)[:] # append all parts
     # load
