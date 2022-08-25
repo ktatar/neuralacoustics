@@ -43,7 +43,7 @@ def getConfigParser(prj_root, caller_name):
     # get config file
     config_path = args.config
     
-    return openConfig(config_path, caller_name)
+    return openConfig(config_path, caller_name), config_path
 
 
 # for determinism in torch DataLoader https://pytorch.org/docs/stable/notes/randomness.html
