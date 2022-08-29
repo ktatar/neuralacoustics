@@ -22,11 +22,11 @@ class DatasetManager:
         config = openConfig(self.config_path, Path(__file__).name)
 
         # Read from config file
-        self.N = config['dataset_generation'].getint('N')
-        self.T = config['dataset_generation'].getint('nsteps')
+        self.N = config['dataset_generator_parameters'].getint('N')
+        self.T = config['numerical_model_parameters'].getint('nsteps')
         self.T += 1
-        self.w = config['dataset_generation'].getint('w')
-        self.h = config['dataset_generation'].getint('h')
+        self.w = config['numerical_model_parameters'].getint('w')
+        self.h = config['numerical_model_parameters'].getint('h')
         self.ch = config['dataset_generation'].getint(
             'chunks')  # number of chunks
         self.ch_size = config['dataset_details'].getint(
