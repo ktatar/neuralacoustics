@@ -33,9 +33,11 @@ generator_config_path = config['dataset_generation'].get('generator_config')
 # default config has same name as generator and is in same folder
 if generator_config_path == 'default' or generator_config_path == '':
   generator_config_path = Path(generator_.replace('PRJ_ROOT', prj_root)).joinpath(generator_name +'.ini') # generator_dir/generator_name_.ini 
+elif generator_config_path == 'this_file':
+    generator_config_path = Path(config_path.replace('PRJ_ROOT', prj_root)) #sets the generator config file to the one passed from the command line.
 else:
-  generator_config_path = Path(config_path.replace('PRJ_ROOT', prj_root)) #sets the generator config file to the one passed from the command line.
-
+    generator_config_path = Path(generator_config_path.replace('PRJ_ROOT', prj_root)) #otherwise, use the file specified in the config
+    
 # chunks
 ch = config['dataset_generation'].getint('chunks') # num of chunks
 
