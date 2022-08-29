@@ -53,8 +53,10 @@ def load(config_path, ch, prj_root):
     # default config has same name as generator and is in same folder
     if num_model_config_path == 'default' or num_model_config_path == '':
         num_model_config_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.ini') # model_dir/model_name/model_name.ini
-    else:
+    elif num_model_config_path == 'this_file':
         num_model_config_path = config_path
+    else:
+        num_model_config_path = Path(num_model_config_path.replace('PRJ_ROOT', prj_root))
 
     # dataset size
     N = config['dataset_generator_parameters'].getint('N') # num of dataset points
