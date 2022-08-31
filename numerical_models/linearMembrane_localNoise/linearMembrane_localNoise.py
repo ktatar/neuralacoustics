@@ -117,7 +117,7 @@ def _load(solver_path, prj_root):
     return
 
 
-def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_size, disp=False, dispRate=1, pause=0):
+def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, disp=False, dispRate=1, pause=0):
     #function will be called by generator, all params passed at runtime (does not use global variables)
     #The arguments mu, rho, gamma, ex_x, ex_y, ex_amp are all arrays with b elements.
 
@@ -137,12 +137,11 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_size, disp=Fals
     
     #--------------------------------------------------------------
     # initial condition
-    
     excite = torch.zeros(b, h-2, w-2, nsteps)
     
     # initial condition is first excitation
     for _b in range(b):
-        excite[_b, ex_y[_b]: ex_y[_b]+ex_size[_b], ex_x[_b]: ex_x[_b]+ex_size[_b], 0] = torch.randn(ex_size[_b],ex_size[_b])
+        excite[_b, :, :, 0] = noise_submatrix[_b, ...]
 
     #--------------------------------------------------------------
     # run solver
@@ -155,8 +154,11 @@ def run_test(dev, dispRate=1, pause=10):
     _b = 1
     _disp = True
     
+    noise_submatrix = torch.zeros(_b, h-2, w-2)
+    noise_submatrix[0, ex_y[0]: ex_y[0]+ex_size[0], ex_x[0]: ex_x[0]+ex_size[0]] = torch.randn(ex_size[0],ex_size[0])
+    
     #call run using those parameters+global variables, and return the result.
-    test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_size, _disp, dispRate, pause)
+    test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, _disp, dispRate, pause)
     
     return [test_sol, test_sol_t]
 
