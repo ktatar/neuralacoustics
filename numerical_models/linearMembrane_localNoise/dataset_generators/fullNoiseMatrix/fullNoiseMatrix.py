@@ -126,7 +126,7 @@ def generate_fullNoiseMatrix(_B):
     _ex_x = torch.zeros(_B) 
     _ex_y = torch.zeros(_B)
     _noise_matrix = torch.randn(_B, h-2, w-2)
-    return _ex_x, _ex_y, _noise_submatrix
+    return _ex_x, _ex_y, _noise_matrix
 
 def getSolverInfoFromModel():
     return model.getSolverInfo()
