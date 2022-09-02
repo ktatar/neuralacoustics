@@ -135,7 +135,8 @@ def generate_randNoiseSubmatrix(_B):
     rd_y = torch.zeros(_B, dtype=torch.long)
     rand_size = torch.randint(init_size_min, init_size_max+1, (_B, ), dtype=torch.long) # generates a random size for the submatrix, between min_side and max_side (both inclusive)
     _noise_submatrix = torch.zeros(_B, h-2, w-2)
-     
+    
+    #TODO swap this for loop with vectorized approach
     for _b in range(_B):
         rd_x[_b] = torch.randint(0, w-1-rand_size[_b], (1, ))
         rd_y[_b] = torch.randint(0, h-1-rand_size[_b], (1, ))
