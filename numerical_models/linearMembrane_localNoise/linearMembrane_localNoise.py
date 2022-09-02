@@ -149,7 +149,7 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, d
 
     return [sol, sol_t]
 
-def run_test(dev, dispRate=1, pause=10):
+def run_test(dev, dispRate=1, pause=0):
     # set parameters
     _b = 1
     _disp = True
