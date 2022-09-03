@@ -10,164 +10,129 @@ solver = 0 # where to load solver
 modelName = ''
 w = -1
 h = -1
-mu = -1
-rho = -1
-gamma = -1
-
-# grid params
-num_xFreqs = 0
-num_yFreqs = 0
-input_grid = [] # all magnitude-phase couples per each x spatial freq will be stored here
-# internal state
-current_input = 0
-
-# working copy of domain size vars
-W = 0
-H = 0
+mu = torch.empty((1,)) # declared as tensor to facilitate vector operations
+rho = torch.empty((1,))
+gamma = torch.empty((1,))
+ex_input_freq = torch.empty((1,), dtype = torch.long) # declared as long in order to allow indexing
+ex_input_mag = torch.empty((1,)) 
+ex_input_phase = torch.empty((1,))
+dt = -1
+nsteps = -1
 
 
-def load(model_name, config_path, _w, _h):
+def load(config_path, prj_root):    
+    global modelName
+
+    # get config file
+    modelName = Path(__file__).stem #extracts modeName from this filename, stores it in global variable
+    config = openConfig(config_path, modelName) 
+
+    #--------------------------------------------------------------
+
+    # read from config file
+    solver = config['solver'].get('solver')#solver path
+    
+    # other params will be passed to run() at run-time
+
+    #--------------------------------------------------------------
+
+    # load
+    _load(solver, prj_root) #loads solver
+
+    return
+
+def load_test(config_path, prj_root):    
     # to prevent python from declaring new local variables with the same names
-    # only needed when content of variables is modfied
-    global solver 
+    # only needed when content of variables is modified
     global modelName
     global w
     global h
     global mu
     global rho
     global gamma
-    global num_xFreqs
-    global num_yFreqs
-    global input_grid
-    global W
-    global H
+    global dt
+    global nsteps
+    global ex_input_freq
+    global ex_input_mag
+    global ex_input_phase
 
-    modelName = model_name
-
-    # get config file
-    config = openConfig(config_path, modelName)
     
-    w = _w
-    h = _h
-
+    # get config file
+    modelName = Path(__file__).stem #extracts modeName from this filename, stores it in global variable
+    config = openConfig(config_path, modelName) 
 
     #--------------------------------------------------------------
 
     # read from config file
     # solver
-    solver_dir = config['solver'].get('solver_dir')
-    solver_name = config['solver'].get('solver_name')
+    solver_path = config['solver'].get('solver')
 
-    # simulation parameters
-    mu = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1; defined as ( 1+(eta*dt)/2 )^-1, with eta=viscosity of medium and dt=1/samplerate
-    rho = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; defined as rho = [v*ds/dt)]^2, with v=speed of wave in medium, ds=size of each grid point [same on x and y] and dt=1/samplerate
-    gamma = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
-
-    # grid parameters -> grid refers to how parameters are sampled between a min and a max
-    mag_min = config['numerical_model_parameters'].getfloat('mag_min') # minimum magnitude in the grid
-    mag_max = config['numerical_model_parameters'].getfloat('mag_max') # maximum magnitude in the grid
-    mag_step = config['numerical_model_parameters'].getfloat('mag_step') # step between consectutive magnitudes in grid
-
-    # phase is normalized
-    phase_min = config['numerical_model_parameters'].getfloat('phase_min') # minimum phase in the grid
-    phase_max = config['numerical_model_parameters'].getfloat('phase_max') # maximum phase in the grid
-    phase_step = config['numerical_model_parameters'].getfloat('phase_step') # step between consectutive phases in grid
-
-    bin_min = config['numerical_model_parameters'].getint('bin_min') # index of starting [minimum spatial freq], then grid will span full width of frequency domain
-
-
-    #--------------------------------------------------------------
-    # init input grid, always deterministic
-
-    # prepare input frequencies as mag and phase couples
-    mag_num = math.floor((mag_max-mag_min)/mag_step) + 1
-    phase_num = math.floor((phase_max-phase_min)/phase_step) + 1
-
-    magnitudes = [mag_min + i*mag_step for i in range(mag_num)]
-    phases = [phase_min + i*phase_step for i in range(phase_num)]
-
-
-    # compute size of frequency domain
+    #parses all simulation parameters
+    mu[0] = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
+    rho[0] = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; formally defined as rho = [c*ds/dt)]^2, with c=speed of sound in medium, ds=size of each grid point [same on x and y], dt=1/samplerate
+    gamma[0] = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
     
-    W = (w-2) # -2 to remove boundary frame
-    H = (h-2) # -2 to remove boundary frame
-    # number of bins with positive frequencies in both dimensions
-    num_xFreqs = W//2 + 1 
-    num_yFreqs = H//2 + 1
+    w = config['numerical_model_parameters'].getint('w') # width of grid
+    h = config['numerical_model_parameters'].getint('h') # height of grid
+    dt = 1.0/config['numerical_model_parameters'].getfloat('samplerate') #uses samplerate from ini file to calculate.
+    nsteps = config['numerical_model_parameters'].getint('nsteps')#number of steps
+    
+    #inital condition
+    ex_input_freq[0] = config['numerical_model_parameters'].getint('bin') # bin determines frequency
+    ex_input_mag[0] = config['numerical_model_parameters'].getfloat('magnitude') # amplitude of the wave
+    ex_input_phase[0] =  config['numerical_model_parameters'].getfloat('phase') # phase of the wave (normalized radians)
 
-    # we need at least 1 bin
-    if bin_min >= num_xFreqs:
-        bin_min = 0
-
-    num_bins = num_xFreqs - bin_min
-
-    # empty structure
-    input_grid = torch.zeros([mag_num*phase_num*num_bins,3]) # first dimension is index of input, then spatial freq/magnitude/phase
-    # fill it!
-    for x in range(num_bins):
-        for m in range(mag_num):
-            for p in range(phase_num):
-                input_grid[x*mag_num*phase_num + m*phase_num + p, 0] = x+bin_min
-                input_grid[x*mag_num*phase_num + m*phase_num + p, 1] = magnitudes[m]
-                input_grid[x*mag_num*phase_num + m*phase_num + p, 2] = phases[p]
 
     #--------------------------------------------------------------------------------------
 
+    # load
+    _load(solver_path, prj_root) #loads solver
+    
+    return
+
+def _load(solver_path, prj_root):    
+    global solver
+
+    #--------------------------------------------------------------
     # load solver
     # we want to load the package through potential subfolders
-    solver_path_folders = Path(solver_dir.replace('PRJ_ROOT', '.')).parts
-
+    solver_dir_folders = Path(solver_path.replace('PRJ_ROOT', prj_root)).parts # create full path [with no file extension] and get folders and file name
+    
     # create package structure by concatenating folders with '.'
-    packages_struct = solver_path_folders[0]
-    for pkg in range(1,len(solver_path_folders)):
-        packages_struct += '.'+solver_path_folders[pkg] 
+    packages_struct = '.'.join(solver_dir_folders)[:] # append all parts
     # load
-    solver = __import__(packages_struct + '.' + solver_name, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
+    solver = __import__(packages_struct, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
 
-    # return number of inputs that the model will span, i.e., number of data points
-    return len(input_grid)
+    return
 
-
-def run(dev, dt, nsteps, b, disp=False, dispRate=1, pause=0):
-    # to prevent python from declaring new local variables with the same names
-    # only needed when content of variables is modfied
-    global current_input
+def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase, disp=False, dispRate=1, pause=0):
+    #function will be called by generator, all params passed at runtime (does not use global variables)
+    #The arguments mu, rho, gamma, ex_x, ex_y, ex_amp are all arrays with b elements.
 
     # set parameters
 
     # propagation params, explained in solver
-    # potentially model can have different values across domain
-    _mu = torch.ones(b, h, w) * mu
-    _rho = torch.ones(b, h, w) * rho
-    _gamma = torch.ones(b, h, w) * gamma
-
+    # potentially model can have different values across domain (for now, model params only differ by batch, not across domain)
+    _mu = torch.ones(b, h, w) 
+    _rho = torch.ones(b, h, w)
+    _gamma = torch.ones(b, h, w)
+    
+    # element-wise multiplication of tensor slice and vector
+    # adapted from here: https://discuss.pytorch.org/t/element-wise-multiplication-of-a-vector-and-a-matrix/56946
+    _mu = mu.view(-1, 1, 1).expand_as(_mu) * _mu
+    _rho = rho.view(-1, 1, 1).expand_as(_rho) * _rho
+    _gamma = gamma.view(-1, 1, 1).expand_as(_gamma) * _gamma
+    
     #--------------------------------------------------------------
     # initial condition
-    ex_input_freq = torch.zeros(b).long() # spatial freq, as long to be used as index of freq tensor
-    ex_input_mag = torch.zeros(b) # magnitude
-    ex_input_phase = torch.zeros(b) # phase    
-
-    if current_input+b-1 < len(input_grid):
-        ex_input_freq[:] = input_grid[current_input:current_input+b, 0]
-        ex_input_mag[:] = input_grid[current_input:current_input+b, 1]
-        ex_input_phase[:] = input_grid[current_input:current_input+b, 2]*2*math.pi
-    else:
-        # fill a partial batch, with as many inputs as we have left
-        grid_len = len(input_grid)
-        partial_b = grid_len - current_input
-        ex_input_freq[:partial_b] = input_grid[current_input:, 0]
-        ex_input_mag[:partial_b] = input_grid[current_input:, 1]
-        ex_input_phase[:partial_b] = input_grid[current_input:, 2]*2*math.pi
-        # once we have exhausted all the possible inputs, we fill the remainder with silence
-        rem = b-partial_b
-        ex_input_freq[rem:] = 0
-        ex_input_mag[rem:] = 0
-        ex_input_phase[rem:] = 0
-
-    # advance for next call
-    current_input += b
-
-
+    
+    W = w-2 # -2 to remove boundary frame
+    H = h-2 # -2 to remove boundary frame
+    
+    # number of bins with positive frequencies in both dimensions
+    num_xFreqs = W//2 + 1 
+    num_yFreqs = H//2 + 1
+    
     xi0 = torch.zeros(b, H, W) # this will be overwritten with initial condition
     # create empty spatial frequency tensor, to initialize
     real = torch.zeros(b, H, num_xFreqs)
@@ -177,8 +142,8 @@ def run(dev, dt, nsteps, b, disp=False, dispRate=1, pause=0):
     #freq = torch.fft.rfft2(xi0) # ready to initialize the domain in the spatial frequency domain!
 
     # spatial frequency initialization
-    # polar turns cartesian coords to polar coords, or abs and angle to real and imaginary part
-    freq[range(freq.shape[0]), 0, ex_input_freq] = torch.polar(ex_input_mag, ex_input_phase) 
+    # polar turns polar coords to cartesian coords, or abs and angle to real and imaginary part
+    freq[range(freq.shape[0]), 0, ex_input_freq] = torch.polar(ex_input_mag, 2*math.pi*ex_input_phase) 
     # tensor indexing with range() instead of ':' adapted from here: https://stackoverflow.com/questions/61096522/pytorch-tensor-advanced-indexing
     # an alternative solution to torch.polar:
     #freq[] = ex_input_mag * exp(1j*ex_input_phase)
@@ -202,17 +167,27 @@ def run(dev, dt, nsteps, b, disp=False, dispRate=1, pause=0):
     xi0 = ex_input_mag[:, None, None] * xi0 / xi0.amax(dim=(1, 2))[:, None, None]
     # notice that despite the initial condition being normalized to the chosen mag value, the maximum displacement during the time simulation
     # will likely go above that due to constructive interference with reflected waves
-
-    excite = torch.zeros(b, h-2, w-2, nsteps) 
-    # initial condition is first excitation
+    
+    excite = torch.zeros(b, h-2, w-2, nsteps)
     excite[..., 0] = xi0[...]
+    # tensor indexing with range() instead of ':' adapted from here: https://stackoverflow.com/questions/61096522/pytorch-tensor-advanced-indexing
+
     #--------------------------------------------------------------
-
-
     # run solver
     sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
 
     return [sol, sol_t]
+
+def run_test(dev, dispRate=1, pause=0):
+    # set parameters
+    _b = 1
+    _disp = True
+    
+    
+    #call run using those parameters+global variables, and return the result.
+    test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase, _disp, dispRate, pause)
+    
+    return [test_sol, test_sol_t]
 
 
 def getSolverInfo():
