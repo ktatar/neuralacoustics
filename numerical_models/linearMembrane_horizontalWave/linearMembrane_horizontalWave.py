@@ -105,6 +105,9 @@ def load_test(config_path, prj_root):
 
 def _load(solver_path, prj_root):    
     global solver
+    
+    solver_name = Path(solver_path).parts[-1]
+    solver_path = solver_path + '/' + solver_name 
 
     #--------------------------------------------------------------
     # load solver
