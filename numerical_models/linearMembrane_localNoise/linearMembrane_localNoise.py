@@ -84,6 +84,9 @@ def load_test(config_path, prj_root):
     ex_y[0] = config['numerical_model_parameters'].getint('ex_y') # y value for excitation submatrix (top left corner)
     ex_size[0] = config['numerical_model_parameters'].getfloat('ex_size') # size of excitation submatrix
     
+    #seed
+    seed = config['numerical_model_parameters'].getint('seed') #for determinism.
+    
     clip = False
     if (ex_x[0] + ex_size[0] >= w-2):
         ex_size[0] = w-3-ex_x[0]
@@ -93,7 +96,12 @@ def load_test(config_path, prj_root):
         clip = True
     if clip:
         print(f'{modelName}: Requested size exceeds domain and will be clipped to {ex_size[0]} cells')
-        
+    
+    #-----------------------------------------------------------------------------------------------------------------------------------
+    torch.use_deterministic_algorithms(True) #enables determinism.
+    torch.backends.cudnn.deterministic = True 
+    torch.manual_seed(seed) #sets seed
+    
     #--------------------------------------------------------------
 
     # load
