@@ -82,6 +82,19 @@ def load_test(config_path, prj_root):
     ex_input_mag[0] = config['numerical_model_parameters'].getfloat('magnitude') # amplitude of the wave
     ex_input_phase[0] =  config['numerical_model_parameters'].getfloat('phase') # phase of the wave (normalized radians)
 
+    if ex_input_freq[0] < 0:
+        ex_input_freq[0] = 0
+        print(f'{modelName}: Requested bin outside range, will be clipped to {ex_input_freq[0]}')   
+    elif ex_input_freq[0] > (w-2)//2:
+        ex_input_freq[0] = (w-2)//2
+        print(f'{modelName}: Requested bin outside range, will be clipped to {ex_input_freq[0]}')
+        
+    if ex_input_phase[0] < 0:
+        ex_input_phase[0] = 0.0
+        print(f'{modelName}: Requested phase outside range [0, 1) (normalized radians), will be clipped to {ex_input_phase[0]:.2f}')
+    elif ex_input_phase[0] >= 1:
+        ex_input_phase[0] = 0.99
+        print(f'{modelName}: Requested phase outside range [0, 1) (normalized radians), will be clipped to {ex_input_phase[0]:.2f}')
 
     #--------------------------------------------------------------------------------------
 
