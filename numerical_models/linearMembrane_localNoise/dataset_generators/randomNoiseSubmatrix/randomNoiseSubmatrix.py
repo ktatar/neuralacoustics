@@ -21,7 +21,7 @@ init_size_min = -1
 init_size_max = -1
 model = 0
 
-def load(config_path, ch, prj_root):
+def load(config_path, ch, prj_root, pause):
     # in same style as load_test, this function writes the config variables to global variables.
     global N 
     global B 
@@ -68,7 +68,7 @@ def load(config_path, ch, prj_root):
     B = config['dataset_generator_parameters'].getint('B') # batch size
     
     # seconds to pause between datapoints during visualization
-    pause_sec = config['dataset_generator_parameters'].getfloat('pause_sec')
+    pause_sec = pause
     # only used in dry run and it will be ignored in solver if <= 0
     
     #seed
