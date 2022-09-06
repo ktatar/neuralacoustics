@@ -86,9 +86,10 @@ def load(config_path, ch, prj_root):
     nsteps = config['numerical_model_parameters'].getint('nsteps') # = T_in+T_out, e.g., Tin = 10, T = 10 -> input [0,Tin), output [10, Tin+T)
     dt = 1.0 / config['numerical_model_parameters'].getint('samplerate') # seconds (1/Hz), probably no need to ever modify this...
     
-    # noise submatrix side
-    init_size_min = config['dataset_generator_parameters'].getint('init_size_min') # minimum side of noise submatrix [cells]
-    init_size_max = config['dataset_generator_parameters'].getint('init_size_max') # maximum side of noise submatrix [cells]
+    # noise submatrix side (using eval to allow the use of w and h), these must be ints.
+    init_size_min = int(eval(config['dataset_generator_parameters'].get('init_size_min'))) # minimum side of noise submatrix [cells]
+    init_size_max = int(eval(config['dataset_generator_parameters'].get('init_size_max'))) # maximum side of noise submatrix [cells]
+
     
     #------------------------------------------------------------------------------------------------------------------------------------
     #loads model    
