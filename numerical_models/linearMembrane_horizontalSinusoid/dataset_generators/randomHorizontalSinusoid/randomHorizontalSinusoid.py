@@ -124,7 +124,7 @@ def generate_datasetBatch(dev, dryrun):
 
 def generate_randWave_tensors(_B):
     rd_input_freq = torch.randint(0, (w-2)//2+1, (_B,)) #rand ints between 0 and num_xFreqs
-    rd_magnitude = torch.rand((_B,)) #rand numbers between [0, 1)
+    rd_magnitude = torch.randn((_B,))
     rd_phase = torch.rand((_B,)) #rand numbers between [0, 1)
     return rd_input_freq, rd_magnitude, rd_phase
 
