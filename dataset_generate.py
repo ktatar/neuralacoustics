@@ -51,7 +51,9 @@ dev = dev_
 
 #for quick visualization
 dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
-
+# seconds to pause between datapoints during visualization
+pause = config['dataset_generation'].getfloat('pause_sec')
+# only used in dry run and it will be ignored in solver if <= 0
 #-------------------------------------------------------------------------------------
 
 # in case of generic gpu or cuda explicitly, check if available
@@ -78,7 +80,7 @@ generator = __import__(packages_struct, fromlist=['load, generate_datasetBatch, 
 
 
 #-------------------------------------------------------------------------------
-num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path = generator.load(generator_config_path, ch, prj_root) #return number of batches, chunks, remainder, after loading
+num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path = generator.load(generator_config_path, ch, prj_root, pause) #return number of batches, chunks, remainder, after loading
 
 batches_per_ch = num_of_batches//ch
 ch_size = batches_per_ch * B # num of data points per chunk
