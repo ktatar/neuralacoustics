@@ -12,7 +12,6 @@ h = -1
 mu = torch.empty((1,))
 rho = torch.empty((1,))
 gamma = torch.empty((1,))
-seed = -1
 nsteps = -1
 dryrun = -1
 dt = -1
@@ -146,7 +145,7 @@ def load(config_path, ch, prj_root, pause):
         
     rem = 0 # is there any remainder?
     
-    return num_of_batches, ch, N, B, h, w, nsteps, dt, num_model_config_path
+    return num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path
 
 def generate_datasetBatch(dev, dryrun):
     
