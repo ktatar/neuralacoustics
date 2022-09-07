@@ -127,11 +127,6 @@ def load(config_path, ch, prj_root, pause):
     model = __import__(packages_struct, fromlist=['load, run']) # model.path.numerical_model is model script [i.e., package]  
     model.load(num_model_config_path, prj_root) #loads solver for model
     
-    #-----------------------------------------------------------------------------------------------------------------------------------
-    torch.use_deterministic_algorithms(True) #enables determinism.
-    torch.backends.cudnn.deterministic = True 
-    torch.manual_seed(seed) #sets seed
-    
     #----------------------------------------------------------------------------
     #compute meta data, e.g., duration, actual size...
     
