@@ -225,18 +225,18 @@ print(f'\nModel name: {model_name}')
 
 # in case of generic gpu or cuda explicitly, check if available
 if dev == 'gpu' or 'cuda' in dev:
-  if torch.cuda.is_available():  
-    model = network(network_config_path, T_in).cuda()
-    dev  = torch.device('cuda')
-    #print(torch.cuda.current_device())
-    #print(torch.cuda.get_device_name(torch.cuda.current_device()))
-  else:
-  	print('GPU/Cuda not available, switching to CPU...')
-  	model = network(network_config_path, T_in)
-  	dev  = torch.device('cpu')
+	if torch.cuda.is_available():
+		model = network(network_config_path, T_in).cuda()
+		dev = torch.device('cuda')
+        #print(torch.cuda.current_device())
+        #print(torch.cuda.get_device_name(torch.cuda.current_device()))
+	else:
+		print('GPU/Cuda not available, switching to CPU...')
+		model = network(network_config_path, T_in)
+		dev  = torch.device('cpu')
 else:
-  model = network(network_config_path, T_in)
-  dev  = torch.device('cpu')
+	model = network(network_config_path, T_in)
+	dev  = torch.device('cpu')
 
 print('Device:', dev)
 
@@ -432,8 +432,9 @@ for (k, v) in network_config.items('network_params_details'):
     config_model.set('network_params_details', k, v)
 
 config_model.add_section('network_parameters')
-for (k, v) in network_config.items('network_parameters'):
-    config_model.set('network_parameters', k, v)
+config_model.set('network_parameters', 'network_modes', model.modes1)
+config_model.set('network_parameters', 'network_width', model.width)
+config_model.set('network_parameters', 'stacks_num', model.stacks_num)
 config_model.set('network_parameters', 'T_in', T_in)
 
 
