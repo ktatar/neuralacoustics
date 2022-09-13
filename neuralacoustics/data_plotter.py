@@ -25,7 +25,7 @@ def plotDomain(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, 
     plt.pause(0.0001) #VIC without this, figure is not updated
   else:
     plt.pause(pause)
-  plt.cla()
+  plt.cla() #clear axes, found from https://stackoverflow.com/questions/10272478/why-does-my-pylab-animation-slow-down-with-each-update
   
 
 
