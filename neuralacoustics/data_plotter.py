@@ -22,6 +22,7 @@ def plotDomain(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, 
   if pause == 0:
     pause = 0.00001 #VIC 0 stalls plot
   if pause == -1:
+    plt.waitforbuttonpress()
     plt.pause(0.0001) #VIC without this, figure is not updated
   else:
     plt.pause(pause)
@@ -69,6 +70,7 @@ def plot2Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
     plt.pause(0.0001) #VIC without this, figure is not updated
   else:
     plt.pause(pause)
+  plt.cla()
 
 
 def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001, figNum=0, titles=None, mic_x=-1, mic_y=-1):
@@ -133,6 +135,7 @@ def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
     plt.pause(0.0001) #VIC without this, figure is not updated
   else:
     plt.pause(pause)
+  plt.cla()
 
 
 def plotWaveform(data, sr=44100, maxAmp=20.0, log_min=10.0, titles=None):
@@ -169,7 +172,7 @@ def plotWaveform(data, sr=44100, maxAmp=20.0, log_min=10.0, titles=None):
   
   plt.tight_layout()
   plt.show()
-  
+  plt.cla()
 #-------------------------------------------------------------------------------------------------------
 
 
