@@ -331,8 +331,8 @@ for ep in range(epochs):
     epoch_train_loss_step =  train_l2_step / n_train / T_out
     epoch_train_loss_full =  train_l2_full / n_train
 
-    epoch_test_loss_step =  test_l2_step / n_train / T_out
-    epoch_test_loss_full =  test_l2_full / n_train
+    epoch_test_loss_step =  test_l2_step / n_test / T_out
+    epoch_test_loss_full =  test_l2_full / n_test
 
     writer.add_scalar("Loss Step/train", epoch_train_loss_step, ep)
     writer.add_scalar("Loss Full/train", epoch_train_loss_full, ep)
