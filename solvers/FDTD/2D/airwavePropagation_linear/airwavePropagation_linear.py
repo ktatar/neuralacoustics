@@ -373,7 +373,7 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
                
         t += dt
         
-    return sol, sol_t
+    return sol[:, pmls:-pmls, pmls:-pmls,:], sol_t
 
 
 def getInfo():
