@@ -1,5 +1,6 @@
 import torch
 # to load dataset
+from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.DatasetManager import DatasetManager
 from neuralacoustics.data_plotter import plotDomain # to plot data entries (specific series of domains)
 from neuralacoustics.utils import getProjectRoot
@@ -11,10 +12,10 @@ prj_root = getProjectRoot(__file__)
 
 
 #-------------------------------------------------------------------------------
-# simulation parameters
+# simulation parameters (taken from old dataset_visualizer)
 
 # get config file
-config = getConfigParser(prj_root, __file__) # we call this script from command line directly
+config, config_path = getConfigParser(prj_root, __file__) # we call this script from command line directly
 # hence __file__ is not a path, just the file name with extension
 
 # read params from config file
@@ -22,9 +23,12 @@ config = getConfigParser(prj_root, __file__) # we call this script from command 
 # first how to load dataset
 
 # dataset name
-dataset_name = config['dataset_visualization'].get('dataset_name')
+dataset = config['dataset_visualization'].get('dataset')
+
+dataset_name = Path(dataset).parts[-1]
+
 # dataset dir
-dataset_dir = config['dataset_visualization'].get('dataset_dir')
+dataset_dir = '/'.join(Path(dataset).parts[:-1])
 dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
 
 # total number of data points to load, i.e., specific sub-series of time steps within data entries
@@ -128,5 +132,3 @@ for d_n in range(0, num_of_datapoints):
         
         print(f'datapoint {datapoint_index+d_n}, timstep {t_n} (max: {dp[max_indices[0], max_indices[1]]})') #VIC any better way of doing this?
         plotDomain(dp, pause=pause)
-
-
