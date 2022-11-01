@@ -1,9 +1,7 @@
 import torch
-import configparser # to save config in new ini file
-import scipy.io # to save dataset
 from pathlib import Path # to properly handle paths and folders on every os
-from timeit import default_timer # to measure processing time
 from neuralacoustics.utils import openConfig
+from neuralacoustics.utils import import_file
 
 N = -1
 B = -1
@@ -40,23 +38,12 @@ def load(config_path, ch, prj_root, pause):
     
     #------------------------------------------------------------------------------------------------------------------------------------
     #parameters
-    
-    #model
-    num_model = config['dataset_generator_parameters'].get('numerical_model') #path of num_model
-    num_model_name = Path(num_model).parts[-1] 
-    
-    num_model_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.py') # complete path to file/model
 
-    #model config file
-    num_model_config_path = config['dataset_generator_parameters'].get('numerical_model_config')
+    # model path
+    model_path = config['dataset_generator_parameters'].get('numerical_model')  # path of num_model
 
-    # default config has same name as generator and is in same folder
-    if num_model_config_path == 'default' or num_model_config_path == '':
-        num_model_config_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.ini') # model_dir/model_name/model_name.ini
-    elif num_model_config_path == 'this_file':
-        num_model_config_path = config_path
-    else:
-        num_model_config_path = Path(num_model_config_path.replace('PRJ_ROOT', prj_root))
+    # model config file
+    model_config_path = config['dataset_generator_parameters'].get('numerical_model_config')
 
     # dataset size
     N = config['dataset_generator_parameters'].getint('N') # num of dataset points
@@ -66,7 +53,7 @@ def load(config_path, ch, prj_root, pause):
     pause_sec = pause
     # only used in dry run and it will be ignored in solver if <= 0
     
-    #seed
+    # seed
     seed = config['dataset_generator_parameters'].getint('seed') #for determinism.
     
     # domain size
@@ -83,19 +70,17 @@ def load(config_path, ch, prj_root, pause):
     
 
     #------------------------------------------------------------------------------------------------------------------------------------
-    #loads model    
-    model_path_folders = num_model_path.parts
-    # create package structure by concatenating folders with '.'
-    packages_struct = '.'.join(model_path_folders)[:-3] # append all parts and remove '.py' from file/package name
-    
-    # import and load 
-    model = __import__(packages_struct, fromlist=['load, run']) # model.path.numerical_model is model script [i.e., package]  
-    model.load(num_model_config_path, prj_root) #loads solver for model
+    # imports + loads model
+
+    model_function_list = ['load, run']  # specify which functions to load.
+    model, model_config_path = import_file(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
+
+    model.load(model_config_path, prj_root)  # loads solver for model
     
     #-----------------------------------------------------------------------------------------------------------------------------------
-    torch.use_deterministic_algorithms(True) #enables determinism.
+    torch.use_deterministic_algorithms(True)  # enables determinism.
     torch.backends.cudnn.deterministic = True 
-    torch.manual_seed(seed) #sets seed
+    torch.manual_seed(seed)  # sets seed
     
     #----------------------------------------------------------------------------
     #compute meta data, e.g., duration, actual size...
@@ -107,10 +92,8 @@ def load(config_path, ch, prj_root, pause):
       ch = num_of_batches//2 # otherwise, a chunk every other batch
     if ch == 0: # always at least one chunk!
       ch = 1
-        
-    rem = 0 # is there any remainder?
-    
-    return num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path
+
+    return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path
 
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
