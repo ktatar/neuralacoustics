@@ -1,12 +1,10 @@
 import torch
-import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
-import random as rd
 from neuralacoustics.utils import openConfig
-
+from neuralacoustics.utils import import_file
 
 # to store values from load()
-solver = 0 # where to load solver
+solver = 0 #  where to load solver
 modelName = ''
 w = -1
 h = -1
@@ -26,7 +24,7 @@ def load(config_path, prj_root):
     global modelName
 
     # get config file
-    modelName = Path(__file__).stem #extracts modeName from this filename, stores it in global variable
+    modelName = Path(__file__).stem  # extracts modeName from this filename, stores it in global variable
     config = openConfig(config_path, modelName) 
 
     #--------------------------------------------------------------
@@ -39,9 +37,10 @@ def load(config_path, prj_root):
     #--------------------------------------------------------------
 
     # load
-    _load(solver, prj_root) #loads solver
+    _load(solver, prj_root, config_path) #loads solver
 
     return
+
 
 def load_test(config_path, prj_root):    
     # to prevent python from declaring new local variables with the same names
@@ -70,22 +69,22 @@ def load_test(config_path, prj_root):
     # solver
     solver_path = config['solver'].get('solver')
 
-    #parses all simulation parameters
-    mu[0] = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
+    # parses all simulation parameters
+    mu[0] = config['numerical_model_parameters'].getfloat('mu')  # damping factor, positive and typically way below 1
     rho[0] = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; formally defined as rho = [c*ds/dt)]^2, with c=speed of sound in medium, ds=size of each grid point [same on x and y], dt=1/samplerate
-    gamma[0] = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
+    gamma[0] = config['numerical_model_parameters'].getfloat('gamma')  # type of edge, 0 if clamped edge, 1 if free edge
     
     w = config['numerical_model_parameters'].getint('w') # width of grid
     h = config['numerical_model_parameters'].getint('h') # height of grid
-    dt = 1.0/config['numerical_model_parameters'].getfloat('samplerate') #uses samplerate from ini file to calculate.
-    nsteps = config['numerical_model_parameters'].getint('nsteps')#number of steps
+    dt = 1.0/config['numerical_model_parameters'].getfloat('samplerate') # uses samplerate from ini file to calculate.
+    nsteps = config['numerical_model_parameters'].getint('nsteps')# number of steps
     
     ex_x[0] = config['numerical_model_parameters'].getint('ex_x') # x value for excitation submatrix (top left corner)
     ex_y[0] = config['numerical_model_parameters'].getint('ex_y') # y value for excitation submatrix (top left corner)
     ex_size[0] = config['numerical_model_parameters'].getfloat('ex_size') # size of excitation submatrix
     
-    #seed
-    seed = config['numerical_model_parameters'].getint('seed') #for determinism.
+    # seed
+    seed = config['numerical_model_parameters'].getint('seed')  # for determinism.
     
     clip = False
     if (ex_x[0] + ex_size[0] >= w-2):
@@ -105,25 +104,14 @@ def load_test(config_path, prj_root):
     #--------------------------------------------------------------
 
     # load
-    _load(solver_path, prj_root) #loads solver
+    _load(solver_path, prj_root, config_path)  # loads solver
     
     return
 
-def _load(solver_path, prj_root):    
+
+def _load(solver_path, prj_root, config_path):
     global solver
-    
-    solver_name = Path(solver_path).parts[-1]
-    solver_path = solver_path + '/' + solver_name 
-    
-    #--------------------------------------------------------------
-    # load solver
-    # we want to load the package through potential subfolders
-    solver_dir_folders = Path(solver_path.replace('PRJ_ROOT', prj_root)).parts # create full path [with no file extension] and get folders and file name
-    
-    # create package structure by concatenating folders with '.'
-    packages_struct = '.'.join(solver_dir_folders)[:] # append all parts
-    # load
-    solver = __import__(packages_struct, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
+    solver, temp_var = import_file(prj_root, config_path, solver_path)
 
     return
 
@@ -151,14 +139,14 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, d
     excite = torch.zeros(b, h-2, w-2, nsteps)
     
     # initial condition is first excitation
-    for _b in range(b):
-        excite[_b, :, :, 0] = noise_submatrix[_b, ...]
+    excite[..., 0] = noise_submatrix[...]
 
     #--------------------------------------------------------------
     # run solver
     sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
 
     return [sol, sol_t]
+
 
 def run_test(dev, dispRate=1, pause=0):
     # set parameters
@@ -172,6 +160,7 @@ def run_test(dev, dispRate=1, pause=0):
     test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, _disp, dispRate, pause)
     
     return [test_sol, test_sol_t]
+
 
 def getSolverInfo():
     if solver == 0:
