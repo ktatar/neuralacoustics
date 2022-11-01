@@ -1,21 +1,20 @@
 import torch
-import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.utils import openConfig
-
+from neuralacoustics.utils import import_file
 
 # to store values from load()
-solver = 0 # where to load solver
+solver = 0  # where to load solver
 modelName = ''
 w = -1
 h = -1
-mu = torch.empty((1,)) # declared as tensor to facilitate vector operations
+mu = torch.empty((1,))  # declared as tensor to facilitate vector operations
 rho = torch.empty((1,))
 gamma = torch.empty((1,))
 init_size_min = -1
 init_size_max = -1
-ex_x = torch.empty((1,), dtype = torch.long) # declared as longs in order to allow indexing
-ex_y = torch.empty((1,), dtype = torch.long) 
+ex_x = torch.empty((1,), dtype=torch.long) # declared as longs in order to allow indexing
+ex_y = torch.empty((1,), dtype=torch.long)
 ex_amp = torch.empty((1,))
 dt = -1
 nsteps = -1
@@ -25,7 +24,7 @@ def load(config_path, prj_root):
     global modelName
 
     # get config file
-    modelName = Path(__file__).stem #extracts modeName from this filename, stores it in global variable
+    modelName = Path(__file__).stem  # extracts modeName from this filename, stores it in global variable
     config = openConfig(config_path, modelName) 
 
     #--------------------------------------------------------------
@@ -38,9 +37,10 @@ def load(config_path, prj_root):
     #--------------------------------------------------------------
 
     # load
-    _load(solver, prj_root) #loads solver
+    _load(solver, prj_root, config_path)  # loads solver
 
     return
+
 
 def load_test(config_path, prj_root):    
     # to prevent python from declaring new local variables with the same names
@@ -69,7 +69,7 @@ def load_test(config_path, prj_root):
     # solver
     solver_path = config['solver'].get('solver')
 
-    #parses all simulation parameters
+    # parses all simulation parameters
     mu[0] = config['numerical_model_parameters'].getfloat('mu') # damping factor, positive and typically way below 1
     rho[0] = config['numerical_model_parameters'].getfloat('rho') # 'propagation' factor, positive and lte 0.5; formally defined as rho = [c*ds/dt)]^2, with c=speed of sound in medium, ds=size of each grid point [same on x and y], dt=1/samplerate
     gamma[0] = config['numerical_model_parameters'].getfloat('gamma') # type of edge, 0 if clamped edge, 1 if free edge
@@ -86,31 +86,19 @@ def load_test(config_path, prj_root):
     #--------------------------------------------------------------
 
     # load
-    _load(solver_path, prj_root) #loads solver
+    _load(solver_path, prj_root, config_path)  # loads solver
     
     return
 
-def _load(solver_path, prj_root):    
+def _load(solver_path, prj_root, config_path):
     global solver
-    
-    solver_name = Path(solver_path).parts[-1]
-    solver_path = solver_path + '/' + solver_name 
-    
-    #--------------------------------------------------------------
-    # load solver
-    # we want to load the package through potential subfolders
-    solver_dir_folders = Path(solver_path.replace('PRJ_ROOT', prj_root)).parts # create full path [with no file extension] and get folders and file name
-    
-    # create package structure by concatenating folders with '.'
-    packages_struct = '.'.join(solver_dir_folders)[:] # append all parts
-    # load
-    solver = __import__(packages_struct, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
+    solver, temp_var = import_file(prj_root, config_path, solver_path)
 
     return    
 
 def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=False, dispRate=1, pause=0):
-    #function will be called by generator, all params passed at runtime (does not use global variables)
-    #The arguments mu, rho, gamma, ex_x, ex_y, ex_amp are all arrays with b elements.
+    # function will be called by generator, all params passed at runtime (does not use global variables)
+    # The arguments mu, rho, gamma, ex_x, ex_y, ex_amp are all arrays with b elements.
 
     # set parameters
 
@@ -138,12 +126,13 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=False
 
     return [sol, sol_t]
 
+
 def run_test(dev, dispRate=1, pause=0):
     # set parameters
     _b = 1
     _disp = True
     
-    #call run using those parameters+global variables, and return the result.
+    # call run using those parameters+global variables, and return the result.
     test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, _disp, dispRate, pause)
     
     return [test_sol, test_sol_t]
