@@ -53,7 +53,68 @@ def seed_worker(worker_id):
     rd.seed(worker_seed)
 
 
+def import_file(prj_root, config_path, file_path, file_config_path='no_config', function_list=['*']):
+    # imports file (model/generator) and returns its associated config file path (if it has one)
 
+    filename = Path(file_path).parts[-1]  # file will be in folder with the same name!
+
+    # default config has same name as generator and is in same folder
+    if file_config_path == 'default' or file_config_path == '':
+        # generator_dir/generator_name_.ini
+        file_config_path = Path(file_path.replace('PRJ_ROOT', prj_root)).joinpath(filename+'.ini')
+
+    elif file_config_path == 'this_file':
+        # sets the config file to the one passed from the command line.
+        file_config_path = Path(config_path.replace('PRJ_ROOT',prj_root))
+
+    elif file_config_path == 'no_config':
+        # in case the file we are importing doesn't have an associated config file (like the solver)
+        pass
+
+    else:
+        # otherwise, use the file previously specified
+        file_config_path = Path(file_config_path.replace('PRJ_ROOT', prj_root))
+    
+    file_path = Path(file_path.replace('PRJ_ROOT', prj_root)).joinpath(filename)
+
+    # we want to load the package through potential subfolders
+    # we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
+    file_path_folders = file_path.parts
+
+    # create package structure by concatenating folders with '.'
+    packages_struct = '.'.join(file_path_folders)[:]  # append all parts
+    file = __import__(packages_struct, fromlist=function_list)  # load (if functions not specified, load all)
+
+    return file, file_config_path
+
+
+def create_dataset_folder(prj_root, dataset_dir):
+    # compute name of dataset + create folder
+
+    # count datasets in folder
+    dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)  # where to save files.
+    datasets = list(Path(dataset_dir).glob('*'))
+    num_of_datasets = len(datasets)
+    # choose new dataset index accordingly
+    DATASET_INDEX = str(num_of_datasets)
+
+    name_clash = True
+
+    while name_clash:
+        name_clash = False
+        for dataset in datasets:
+            # in case a dataset with same name is there
+            if Path(dataset).parts[-1] == 'dataset_' + DATASET_INDEX:
+                name_clash = True
+                DATASET_INDEX = str(int(DATASET_INDEX) + 1)  # increase index
+
+    dataset_name = 'dataset_' + DATASET_INDEX
+    dataset_folder = Path(dataset_dir).joinpath(dataset_name)
+
+    # create folder where to save dataset
+    dataset_folder.mkdir(parents=True, exist_ok=True)
+
+    return dataset_folder, dataset_name
 
 #VIC this is the content of: https://github.com/zongyi-li/fourier_neural_operator/blob/master/utilities3.py
 
