@@ -6,54 +6,45 @@ from timeit import default_timer # to measure processing time
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
+from neuralacoustics.utils import import_file
+from neuralacoustics.utils import create_dataset_folder
 
 
 # retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
 
-
 #-------------------------------------------------------------------------------
 # simulation parameters
 
-# get config file
+# get config file + config path
 config, config_path = getConfigParser(prj_root, __file__) # we call this script from command line directly
 # hence __file__ is not a path, just the file name with extension
 
 # read params from config file
 
-# read params from config file
-generator_ = config['dataset_generation'].get('dataset_generator') #path to the generator folder
-generator_name = Path(generator_).parts[-1] #generator will be in folder with the same name!
-
-generator_path = Path(generator_.replace('PRJ_ROOT', prj_root)).joinpath(generator_name + '.py') 
+# path to the generator folder
+generator_path = config['dataset_generation'].get('dataset_generator')
 
 # generator config file
 generator_config_path = config['dataset_generation'].get('generator_config')
-
-# default config has same name as generator and is in same folder
-if generator_config_path == 'default' or generator_config_path == '':
-  generator_config_path = Path(generator_.replace('PRJ_ROOT', prj_root)).joinpath(generator_name +'.ini') # generator_dir/generator_name_.ini 
-elif generator_config_path == 'this_file':
-    generator_config_path = Path(config_path.replace('PRJ_ROOT', prj_root)) #sets the generator config file to the one passed from the command line.
-else:
-    generator_config_path = Path(generator_config_path.replace('PRJ_ROOT', prj_root)) #otherwise, use the file specified in the config
     
 # chunks
 ch = config['dataset_generation'].getint('chunks') # num of chunks
 
 # dataset dir
-dataset_dir_ = config['dataset_generation'].get('dataset_dir') #keep original string
-dataset_dir = dataset_dir_.replace('PRJ_ROOT', prj_root) #where to save files.
+dataset_dir = config['dataset_generation'].get('dataset_dir')  # where to save datasets
 
-#device
-dev_ = config['dataset_generation'].get('dev') # cpu or gpu, keep original for dataset config
+# device
+dev_ = config['dataset_generation'].get('dev')  # cpu or gpu, keep original for dataset config
 dev = dev_
 
-#for quick visualization
+# for quick visualization
 dryrun = config['dataset_generation'].getint('dryrun') # visualize a single simulation run or save full dataset
+
 # seconds to pause between datapoints during visualization
 pause = config['dataset_generation'].getfloat('pause_sec')
-# only used in dry run and it will be ignored in solver if <= 0
+# only used in dry run and it will be ignored in solver if <= 0. If -1, user input advances visualization
+
 #-------------------------------------------------------------------------------------
 
 # in case of generic gpu or cuda explicitly, check if available
@@ -69,56 +60,29 @@ if dev == 'gpu' or 'cuda' in dev:
 print('Device:', dev)
 
 #------------------------------------------------------------------------------
-# load generator
+# import + load generator, extract parameters
 
-# we want to load the package through potential subfolders
-# we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
-generator_path_folders = generator_path.parts
-# create package structure by concatenating folders with '.'
-packages_struct = '.'.join(generator_path_folders)[:-3] # append all parts and remove '.py' from file/package name
-generator = __import__(packages_struct, fromlist=['load, generate_datasetBatch, getSolverInfoFromModel']) #load
+generator_function_list = ['load, generate_datasetBatch, getSolverInfoFromModel']  # specify which functions to load.
+generator, generator_config_path = import_file(prj_root, config_path, generator_path, generator_config_path, function_list=generator_function_list)
 
-
-#-------------------------------------------------------------------------------
-num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path = generator.load(generator_config_path, ch, prj_root, pause) #return number of batches, chunks, remainder, after loading
+num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path = generator.load(generator_config_path, ch, prj_root, pause) #return number of batches, chunks, remainder, after loading
 
 batches_per_ch = num_of_batches//ch
-ch_size = batches_per_ch * B # num of data points per chunk
+ch_size = batches_per_ch * B  # num of data points per chunk
 
 if dryrun == 0:
+
     # compute name of dataset + create folder
-    #----------------------------------------------------------------------------
-    # count datasets in folder
-    datasets = list(Path(dataset_dir).glob('*'))
-    num_of_datasets = len(datasets)
-    # choose new dataset index accordingly
-    DATASET_INDEX = str(num_of_datasets)
-
-    name_clash = True
-
-    while name_clash:
-        name_clash = False
-        for dataset in datasets:
-            # in case a dataset with same name is there
-            if Path(dataset).parts[-1] == 'dataset_'+DATASET_INDEX:
-                name_clash = True
-                DATASET_INDEX = str(int(DATASET_INDEX)+1) # increase index
-
-    dataset_name = 'dataset_' + DATASET_INDEX
-    dataset_folder = Path(dataset_dir).joinpath(dataset_name)
-
-    # create folder where to save dataset
-    dataset_folder.mkdir(parents=True, exist_ok=True)
-    
+    dataset_folder, dataset_name = create_dataset_folder(prj_root, dataset_dir)
         
     #----------------------------------------------------------------------------
     # compute number of leading zeros for pretty file names
     ch_num = str(ch)
-    l_zeros=len(ch_num) # number of leading zeros in file name
+    l_zeros = len(ch_num) # number of leading zeros in file name
     # check if l_zeros needs to be lowered down
     # e.g., ch_num = 100 -> [0, 99] -> should be printed with only one leading zero:
     # 01, 02, ..., 98, 99
-    cc = pow(10,l_zeros-1)
+    cc = pow(10, l_zeros-1)
     if ch <= cc:
         l_zeros = l_zeros-1
     
@@ -131,12 +95,11 @@ if dryrun == 0:
     #a = torch.zeros(ch_size, h, w) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
     
     # solutions
-    u = torch.zeros(ch_size, h, w, nsteps+1) # +1 becase initial condition is saved at beginning of solution time series!
-    
-    
-    ch_cnt = 0 #keeps track of # of chunks, datapoints during loop.
-    n_cnt=0
-    
+    u = torch.zeros(ch_size, h, w, nsteps+1)  # +1 becase initial condition is saved at beginning of solution time series!
+
+    ch_cnt = 0  # keeps track of # of chunks, datapoints during loop.
+    n_cnt = 0
+    rem = 0  # is there any remainder?
     t1 = default_timer()
     for b in range(num_of_batches):
 
@@ -190,7 +153,7 @@ if dryrun == 0:
 
     # create empty config file
     config = configparser.RawConfigParser()
-    config.optionxform = str # otherwise raw config parser converts all entries to lower case letters
+    config.optionxform = str  # otherwise raw config parser converts all entries to lower case letters
 
     # fill it with dataset details
     config.add_section('dataset_details')
@@ -203,10 +166,10 @@ if dryrun == 0:
     
     
     config.add_section('dataset_generation')
-    config.set('dataset_generation', 'dataset_generator', generator_)
+    config.set('dataset_generation', 'dataset_generator', generator_path)
     config.set('dataset_generation', 'dev', dev_)
     config.set('dataset_generation', 'chunks', ch)
-    config.set('dataset_generation', 'dataset_dir', dataset_dir_)
+    config.set('dataset_generation', 'dataset_dir', dataset_dir)
     config.set('dataset_generation', 'dryrun', dryrun)
 
     # the model config file is the current config file
@@ -235,7 +198,7 @@ if dryrun == 0:
         config.set('numerical_model_parameters', each_key, each_val)        
     
     #retrieve model and solver details from model config file
-    config_model = openConfig(num_model_config_path, __file__)
+    config_model = openConfig(model_config_path, __file__)
     
     config.add_section('numerical_model_details')
     for(each_key, each_val) in config_model.items('numerical_model_details'):
