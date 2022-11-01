@@ -1,9 +1,8 @@
 import torch
-import configparser, argparse # to read config from ini file
 import math # for pi and floor
 from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.utils import openConfig
-
+from neuralacoustics.utils import import_file
 
 # to store values from load()
 solver = 0 # where to load solver
@@ -37,7 +36,7 @@ def load(config_path, prj_root):
     #--------------------------------------------------------------
 
     # load
-    _load(solver, prj_root) #loads solver
+    _load(solver, prj_root, config_path)  # loads solver
 
     return
 
@@ -99,25 +98,14 @@ def load_test(config_path, prj_root):
     #--------------------------------------------------------------------------------------
 
     # load
-    _load(solver_path, prj_root) #loads solver
+    _load(solver_path, prj_root, config_path)  # loads solver
     
     return
 
-def _load(solver_path, prj_root):    
-    global solver
-    
-    solver_name = Path(solver_path).parts[-1]
-    solver_path = solver_path + '/' + solver_name 
 
-    #--------------------------------------------------------------
-    # load solver
-    # we want to load the package through potential subfolders
-    solver_dir_folders = Path(solver_path.replace('PRJ_ROOT', prj_root)).parts # create full path [with no file extension] and get folders and file name
-    
-    # create package structure by concatenating folders with '.'
-    packages_struct = '.'.join(solver_dir_folders)[:] # append all parts
-    # load
-    solver = __import__(packages_struct, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
+def _load(solver_path, prj_root, config_path):
+    global solver
+    solver, temp_var = import_file(prj_root, config_path, solver_path)
 
     return
 
@@ -208,7 +196,7 @@ def run_test(dev, dispRate=1, pause=0):
 
 def getSolverInfo():
     if solver == 0:
-        print(f'{model_name}: Cannot get description of solver! Model needs to be run at least once')
+        print(f'{modelName}: Cannot get description of solver! Model needs to be run at least once')
         return {'description':  ''}
     return solver.getInfo()
     
