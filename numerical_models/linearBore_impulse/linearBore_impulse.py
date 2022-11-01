@@ -1,8 +1,7 @@
 import torch
-import configparser, argparse # to read config from ini file
 from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.utils import openConfig
-
+from neuralacoustics.utils import import_file
 
 # to store values from load()
 solver = 0 # where to load solver
@@ -34,7 +33,7 @@ def load(config_path, prj_root):
     #--------------------------------------------------------------
 
     # load
-    _load(solver, prj_root) #loads solver
+    _load(solver, prj_root, config_path)  # loads solver
 
     return
 
@@ -86,27 +85,15 @@ def load_test(config_path, prj_root):
     #--------------------------------------------------------------
 
     # load
-    _load(solver_path, prj_root) #loads solver
+    _load(solver_path, prj_root, config_path)  # loads solver
     
     return
 
-def _load(solver_path, prj_root):    
+def _load(solver_path, prj_root, config_path):
     global solver
-    
-    solver_name = Path(solver_path).parts[-1]
-    solver_path = solver_path + '/' + solver_name 
-    
-    #--------------------------------------------------------------
-    # load solver
-    # we want to load the package through potential subfolders
-    solver_dir_folders = Path(solver_path.replace('PRJ_ROOT', prj_root)).parts # create full path [with no file extension] and get folders and file name
-    
-    # create package structure by concatenating folders with '.'
-    packages_struct = '.'.join(solver_dir_folders)[:] # append all parts
-    # load
-    solver = __import__(packages_struct, fromlist=['*']) # i.e., all.packages.in.solver.dir.solver_name
+    solver, temp_var = import_file(prj_root, config_path, solver_path)
 
-    return    
+    return
 
 def run(dev, b, dt, nsteps, w, h, mu, rho, c, tube_x, tube_y, tube_length, tube_width, ex_mag, disp=False, dispRate=1, pause=0):
     #function will be called by generator, all params passed at runtime (does not use global variables)
@@ -166,5 +153,3 @@ def getSolverInfo():
         return {'description':  ''}
     return solver.getInfo()
     
-
-
