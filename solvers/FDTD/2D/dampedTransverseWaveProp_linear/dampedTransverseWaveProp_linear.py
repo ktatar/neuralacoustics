@@ -73,8 +73,10 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
   xi_lrtb  = torch.zeros([b, h-1, w-1, 4], device=dev) # temp tensor
 
   # where to save solutions
-  sol = torch.zeros([b,h,w,nsteps+1], device=dev)
-  sol_t = torch.zeros(nsteps+1, device=dev)
+  inputs = torch.zeros([b, h, w, nsteps], device=dev)
+  sol = torch.zeros([b,h,w,nsteps], device=dev)
+  sol_t = torch.zeros(nsteps, device=dev)
+  
   # nsteps+1 is the total duration of simulation -> initial condition+requested steps
 
   sol[:, 1:h-1, 1:w-1, 0] = full_excitation[..., 0] # xi0, initial condition
@@ -128,20 +130,19 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
         displacement = xi[0,:,:,2] * (-1*bound[0,:,:,0] + 1) # set zero displacement to boundaries, to identify them
         print(f'step {step+1} of {nsteps}')
         plotDomain(displacement, pause=pause)
-           
+
     t += dt 
 
     # save return values
-    sol[...,step+1] = xi[...,2]
-    sol_t[step+1] = t
+    inputs[...,step] = xi[...,1] # current state (input)
+    sol[...,step] = xi[...,2] # future state (output)
+    sol_t[step] = t
 
     # update
     xi[:,1:h-1,1:w-1,0] = xi[:,1:h-1,1:w-1,1]
     xi[:,1:h-1,1:w-1,1] = xi[:,1:h-1,1:w-1,2]
 
-  return sol, sol_t
-
-
+  return inputs, sol, sol_t
 
 
 def getInfo():
