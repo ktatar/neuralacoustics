@@ -97,11 +97,11 @@ def generate_datasetBatch(dev, dryrun):
 
     if dryrun == 0:
         ex_x, ex_y, ex_amp = generate_randImpulse_tensors(B) 
-        sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp)
+        inputs, sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp)
     else:
         ex_x, ex_y, ex_amp = generate_randImpulse_tensors(1) #create rand tensors for excitation and medium
-        sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
-    return sol, sol_t
+        inputs, sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
+    return inputs, sol, sol_t
 
 
 def generate_randImpulse_tensors(_B):
