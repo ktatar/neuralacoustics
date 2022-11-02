@@ -98,11 +98,11 @@ def load(config_path, ch, prj_root, pause):
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
         ex_x, ex_y, noise_submatrix = generate_fullNoiseMatrix(B) 
-        sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix)
+        input, sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix)
     else:
         ex_x, ex_y, noise_submatrix = generate_fullNoiseMatrix(1) #create rand tensors for excitation and medium
-        sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
-    return sol, sol_t
+        input, sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
+    return input, sol, sol_t
 
 
 def generate_fullNoiseMatrix(_B):
