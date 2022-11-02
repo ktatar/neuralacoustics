@@ -122,9 +122,9 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=False
 
     #--------------------------------------------------------------
     # run solver
-    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
+    inputs, sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
 
-    return [sol, sol_t]
+    return [inputs, sol, sol_t]
 
 
 def run_test(dev, dispRate=1, pause=0):
@@ -133,9 +133,9 @@ def run_test(dev, dispRate=1, pause=0):
     _disp = True
     
     # call run using those parameters+global variables, and return the result.
-    test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, _disp, dispRate, pause)
+    test_inputs, test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, _disp, dispRate, pause)
     
-    return [test_sol, test_sol_t]
+    return [test_inputs, test_sol, test_sol_t]
 
 
 def getSolverInfo():
