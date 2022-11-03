@@ -129,13 +129,13 @@ def generate_datasetBatch(dev, dryrun):
     
     if dryrun == 0:
         ex_input_freq, ex_input_mag, ex_input_phase = generateFromInputGrid(B)
-        sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase)
+        input, sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase)
         
     else:
         ex_input_freq, ex_input_mag, ex_input_phase = generateFromInputGrid(1) #create rand tensors for excitation and medium
-        sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
+        input, sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
     
-    return sol, sol_t
+    return input, sol, sol_t
 
 
 def generateFromInputGrid(_B):
