@@ -20,7 +20,10 @@ from neuralacoustics.DatasetManager import DatasetManager
 from neuralacoustics.data_plotter import plot2Domains, plot3Domains, plotWaveform
 # for PyTorch DataLoader determinism
 from neuralacoustics.utils import openConfig, getConfigParser, seed_worker, getProjectRoot
-
+# for operation count
+# from thop import profile, clever_format (not used)
+# from ptflops import get_model_complexity_info (not used)
+from fvcore.nn import FlopCountAnalysis, flop_count_table, flop_count_str
 
 # Retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
@@ -44,6 +47,8 @@ mic_y = config['evaluation'].getint('mic_y')
 dev = config['evaluation'].get('dev')
 seed = config['evaluation'].getint('seed')
 
+opcount = config['evaluation'].getint('opcount')
+
 # Model
 model_root = config['evaluation'].get('model_dir')
 model_root = model_root.replace('PRJ_ROOT', prj_root)
@@ -66,11 +71,7 @@ network_dir_ = model_config['training'].get('network_dir')
 network_dir = Path(network_dir_.replace('PRJ_ROOT', prj_root)) / network_name
 network_path = network_dir / (network_name + '.py')
 
-network_config_path = config['training'].get('network_config')
-if network_config_path == 'default' or network_config_path == '':
-    network_config_path = network_dir / (network_name + '.ini')
-else:
-    network_config_path = Path(network_config_path.replace('PRJ_ROOT', prj_root))
+network_config_path = model_ini_path
 
 # Load network
 network_path_folders = network_path.parts
@@ -95,6 +96,10 @@ g.manual_seed(seed)
 
 dataset_manager = DatasetManager(dataset_name, dataset_dir, False)
 u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry)
+
+if opcount:
+    u_opcount = dataset_manager.loadDataEntry(n=1, win=T_in+T_out, entry=0)
+    a_opcount = u_opcount[:, :, :, :T_in]
 
 # Get domain size
 u_shape = list(u.shape)
@@ -197,7 +202,7 @@ with torch.no_grad():
             label_waveform[i] = label[0, mic_x, mic_y, 0]
 
         domains = torch.stack([prediction, label, prediction - label])
-        titles = ['Prediction', 'Ground Truth', 'Diff']
+        titles = ['Prediction', 'Ground Truth', 'Difference']
         plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
                     figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
 
@@ -208,3 +213,22 @@ with torch.no_grad():
     if plot_waveform:
         plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
                     'Prediction', 'Ground Truth'])
+    
+    # Count operation number using the input
+    if opcount:
+        a_opcount = a_opcount.to(dev)
+        # pytorch-OpCounter
+        # flops, params = profile(model=model, inputs=(a_opcount,))
+        # print(f'Operation count:')
+        # print(f'\tflops: {flops}, params: {params}')
+
+        # flops-counter
+        # macs, params = get_model_complexity_info(model, (256, 256, 10), as_strings=True, print_per_layer_stat=True, verbose=True)
+        # print(f"Complexity: {macs}")
+        # print(f"Parameters: {params}")
+
+        # fvcore
+        flops_alt = FlopCountAnalysis(model, a_opcount)
+        print(f'Operation count:')
+        print(flop_count_table(flops_alt))
+        # print(flops_alt.by_module_and_operator())
