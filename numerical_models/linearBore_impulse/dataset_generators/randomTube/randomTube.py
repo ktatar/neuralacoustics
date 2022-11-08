@@ -1,7 +1,9 @@
 import torch
+import configparser # to save config in new ini file
+import scipy.io # to save dataset
 from pathlib import Path # to properly handle paths and folders on every os
+from timeit import default_timer # to measure processing time
 from neuralacoustics.utils import openConfig
-from neuralacoustics.utils import import_file
 
 N = -1
 B = -1
@@ -47,12 +49,23 @@ def load(config_path, ch, prj_root, pause):
     
     #------------------------------------------------------------------------------------------------------------------------------------
     #parameters
+    
+    #model
+    num_model = config['dataset_generator_parameters'].get('numerical_model') #path of num_model
+    num_model_name = Path(num_model).parts[-1] 
+    
+    num_model_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.py') # complete path to file/model
 
-    # model path
-    model_path = config['dataset_generator_parameters'].get('numerical_model')  # path of num_model
+    #model config file
+    num_model_config_path = config['dataset_generator_parameters'].get('numerical_model_config')
 
-    # model config file
-    model_config_path = config['dataset_generator_parameters'].get('numerical_model_config')
+    # default config has same name as generator and is in same folder
+    if num_model_config_path == 'default' or num_model_config_path == '':
+        num_model_config_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.ini') # model_dir/model_name/model_name.ini
+    elif num_model_config_path == 'this_file':
+        num_model_config_path = config_path
+    else:
+        num_model_config_path = Path(num_model_config_path.replace('PRJ_ROOT', prj_root))
 
     # dataset size
     N = config['dataset_generator_parameters'].getint('N') # num of dataset points
@@ -84,15 +97,18 @@ def load(config_path, ch, prj_root, pause):
     # time parameters
     nsteps = config['numerical_model_parameters'].getint('nsteps') # = T_in+T_out, e.g., Tin = 10, T = 10 -> input [0,Tin), output [10, Tin+T)
     dt = 1.0 / config['numerical_model_parameters'].getint('samplerate') # seconds (1/Hz), probably no need to ever modify this...
-
+    
+    
 
     #------------------------------------------------------------------------------------------------------------------------------------
-    # imports + loads model
-
-    model_function_list = ['load, run']  # specify which functions to load.
-    model, model_config_path = import_file(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
-
-    model.load(model_config_path, prj_root)  # loads solver for model
+    #loads model    
+    model_path_folders = num_model_path.parts
+    # create package structure by concatenating folders with '.'
+    packages_struct = '.'.join(model_path_folders)[:-3] # append all parts and remove '.py' from file/package name
+    
+    # import and load 
+    model = __import__(packages_struct, fromlist=['load, run']) # model.path.numerical_model is model script [i.e., package]  
+    model.load(num_model_config_path, prj_root) #loads solver for model
     
     #-----------------------------------------------------------------------------------------------------------------------------------
     torch.use_deterministic_algorithms(True) #enables determinism.
@@ -109,8 +125,10 @@ def load(config_path, ch, prj_root, pause):
       ch = num_of_batches//2 # otherwise, a chunk every other batch
     if ch == 0: # always at least one chunk!
       ch = 1
+        
+    rem = 0 # is there any remainder?
     
-    return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path
+    return num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path
 
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
@@ -123,20 +141,16 @@ def generate_datasetBatch(dev, dryrun):
 
 
 def generate_randTubeParams(_B):
-    
-    #generate x-axis parameters
-    tube_x = torch.randint(0, w, (B,)) # random indices (across full domain)
-    tube_len = torch.randint(tube_len_min, tube_len_max + 1, (_B, ), dtype=torch.long)# generates a random length, between min_side and max_side (both inclusive)
-    max_indices_w = w - tube_len # max indices possible for a given tube length
-    tube_x = torch.remainder(tube_x, max_indices_w + 1)# take elementwise index_value % (max_index_value+1), clips to [0,max_index_value]
+    tube_x = torch.zeros(_B, dtype=torch.long) 
+    tube_y = torch.zeros(_B, dtype=torch.long) 
 
-    # repeat for y-axis
-    tube_y = torch.randint(0, h, (B,)) # random indices (across full domain)
-    tube_width = torch.randint(tube_width_min, tube_width_max + 1, (_B, ), dtype=torch.long)
-    max_indices_h = h - (tube_width + 1) # bc of how we construct the walls of the tube, this needs to be offset by 1
-    tube_y = torch.remainder(tube_y, max_indices_h) + 1 # clips to [1, max_index_value]
+    tube_len = torch.randint(tube_len_min, tube_len_max+1, (_B, ), dtype=torch.long)# generates a random len/width, between min_side and max_side (both inclusive)
+    tube_width = torch.randint(tube_width_min, tube_width_max+1, (_B, ), dtype=torch.long)
+    ex_mag = torch.randn(_B)
     
-    ex_mag = torch.randn(_B)# excitation magnitude
+    for _b in range(_B): #should replace with vectorized approach
+        tube_x[_b] = torch.randint(0, w-tube_len[_b], (1, ))
+        tube_y[_b] = torch.randint(1, h-tube_width[_b], (1, )) #starts from 1 to account for offset walls
 
     return tube_x, tube_y, tube_len, tube_width, ex_mag
 
