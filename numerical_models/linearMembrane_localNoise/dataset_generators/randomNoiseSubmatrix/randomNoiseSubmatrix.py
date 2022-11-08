@@ -1,7 +1,9 @@
 import torch
+import configparser # to save config in new ini file
+import scipy.io # to save dataset
 from pathlib import Path # to properly handle paths and folders on every os
+from timeit import default_timer # to measure processing time
 from neuralacoustics.utils import openConfig
-from neuralacoustics.utils import import_file
 
 N = -1
 B = -1
@@ -43,12 +45,23 @@ def load(config_path, ch, prj_root, pause):
     
     #------------------------------------------------------------------------------------------------------------------------------------
     #parameters
+    
+    #model
+    num_model = config['dataset_generator_parameters'].get('numerical_model') #path of num_model
+    num_model_name = Path(num_model).parts[-1] 
+    
+    num_model_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.py') # complete path to file/model
 
-    # model path
-    model_path = config['dataset_generator_parameters'].get('numerical_model')  # path of num_model
+    #model config file
+    num_model_config_path = config['dataset_generator_parameters'].get('numerical_model_config')
 
-    # model config file
-    model_config_path = config['dataset_generator_parameters'].get('numerical_model_config')
+    # default config has same name as generator and is in same folder
+    if num_model_config_path == 'default' or num_model_config_path == '':
+        num_model_config_path = Path(num_model.replace('PRJ_ROOT', prj_root)).joinpath(num_model_name +'.ini') # model_dir/model_name/model_name.ini
+    elif num_model_config_path == 'this_file':
+        num_model_config_path = config_path
+    else:
+        num_model_config_path = Path(num_model_config_path.replace('PRJ_ROOT', prj_root))
 
     # dataset size
     N = config['dataset_generator_parameters'].getint('N') # num of dataset points
@@ -79,13 +92,15 @@ def load(config_path, ch, prj_root, pause):
 
     
     #------------------------------------------------------------------------------------------------------------------------------------
-    # imports + loads model
-
-    model_function_list = ['load, run']  # specify which functions to load.
-    model, model_config_path = import_file(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
-
-    model.load(model_config_path, prj_root)  # loads solver for model
-
+    #loads model    
+    model_path_folders = num_model_path.parts
+    # create package structure by concatenating folders with '.'
+    packages_struct = '.'.join(model_path_folders)[:-3] # append all parts and remove '.py' from file/package name
+    
+    # import and load 
+    model = __import__(packages_struct, fromlist=['load, run']) # model.path.numerical_model is model script [i.e., package]  
+    model.load(num_model_config_path, prj_root) #loads solver for model
+    
     #-----------------------------------------------------------------------------------------------------------------------------------
     torch.use_deterministic_algorithms(True) #enables determinism.
     torch.backends.cudnn.deterministic = True 
@@ -101,8 +116,10 @@ def load(config_path, ch, prj_root, pause):
       ch = num_of_batches//2 # otherwise, a chunk every other batch
     if ch == 0: # always at least one chunk!
       ch = 1
-
-    return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path
+        
+    rem = 0 # is there any remainder?
+    
+    return num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path
 
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
@@ -115,25 +132,18 @@ def generate_datasetBatch(dev, dryrun):
 
 
 def generate_randNoiseSubmatrix(_B):
-    # generate random sizes for the submatrix, min & max sizes both inclusive
-    rand_size = torch.randint(init_size_min, init_size_max + 1, (_B,), dtype=torch.long)
-
-    # create random indices for the submatrix
-    rd_y = torch.randint(0, h-2, (B,))  # random indices (across full domain)
-    max_indices_h = h-2-rand_size  # max indices possible for each submatrix size
-    rd_y = torch.remainder(rd_y, max_indices_h + 1)  # take elementwise index_value % (max_index_value+1),
-
-    rd_x = torch.randint(0, w-2, (B,))  # repeat for x-axis
-    max_indices_w = w-2-rand_size
-    rd_x = torch.remainder(rd_x, max_indices_w + 1)
-
-    # TODO replace for loop with vectorized approach
-    noise_submatrix = torch.zeros(_B, h - 2, w - 2)
+    rd_x = torch.zeros(_B, dtype=torch.long) 
+    rd_y = torch.zeros(_B, dtype=torch.long)
+    rand_size = torch.randint(init_size_min, init_size_max+1, (_B, ), dtype=torch.long) # generates a random size for the submatrix, between min_side and max_side (both inclusive)
+    _noise_submatrix = torch.zeros(_B, h-2, w-2)
+    
+    #TODO swap this for loop with vectorized approach
     for _b in range(_B):
-        noise_submatrix[_b, rd_y[_b]:rd_y[_b] + rand_size[_b], rd_x[_b]:rd_x[_b] + rand_size[_b]] \
-            = torch.randn(rand_size[_b], rand_size[_b])
-
-    return rd_x, rd_y, noise_submatrix
+        rd_x[_b] = torch.randint(0, w-1-rand_size[_b], (1, ))
+        rd_y[_b] = torch.randint(0, h-1-rand_size[_b], (1, ))
+        _noise_submatrix[_b, rd_y[_b]:rd_y[_b]+rand_size[_b], rd_x[_b]:rd_x[_b]+rand_size[_b]] = torch.randn(rand_size[_b], rand_size[_b])
+    
+    return rd_x, rd_y, _noise_submatrix
 
 def getSolverInfoFromModel():
     return model.getSolverInfo()
