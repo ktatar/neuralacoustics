@@ -25,7 +25,7 @@ prj_root = getProjectRoot(__file__)
 # training parameters
 
 # get config file
-config = getConfigParser(prj_root, __file__) # we call this script from command line directly
+config, _ = getConfigParser(prj_root, __file__) # we call this script from command line directly
 # hence __file__ is not a path, just the file name with extension
 
 # read params from config file

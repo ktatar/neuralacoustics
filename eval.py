@@ -29,7 +29,7 @@ from fvcore.nn import FlopCountAnalysis, flop_count_table, flop_count_str
 prj_root = getProjectRoot(__file__)
 
 # Get configuration parameters for evaluation
-config = getConfigParser(prj_root, __file__)
+config, _ = getConfigParser(prj_root, __file__)
 
 # Dataset
 dataset_name = config['evaluation'].get('dataset_name')
