@@ -5,7 +5,7 @@ from neuralacoustics.data_plotter import plotDomain # to plot dryrun
 info = {
   'description': '2D explicit solver of irreducible wave equation, for transverse waves (xi = displacement), with static boundaries and acoustic parameters',
   'mu': 'damping factor, positive and typically way below 1; defined as mu = (eta*dt)/2, with eta=dynamic viscosity of medium and dt=1/samplerate',
-  'rho':  '\"propagation\" factor, positive and lte 0.5; defined as rho = [v*(ds/dt)]^2, with v=speed of wave in medium [also sqrt(tension/area density)], ds=size of each grid point/cell [same on x and y] and dt=1/samplerate',
+  'rho':  '\"propagation\" factor, positive and lte 0.5; defined as rho = [v*(dt/ds)]^2, with v=speed of wave in medium [also sqrt(tension/area density)], ds=size of each grid point/cell [same on x and y] and dt=1/samplerate',
   'gamma': 'type of boundary: 0 if clamped edge, 1 if free edge'
 }
 
