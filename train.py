@@ -14,7 +14,6 @@ from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import count_params
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
-from networks.FNO2d import FNO2d
 from torch.utils.tensorboard import SummaryWriter
 
 # retrieve PRJ_ROOT
@@ -26,7 +25,7 @@ prj_root = getProjectRoot(__file__)
 # training parameters
 
 # get config file
-config = getConfigParser(prj_root, __file__) # we call this script from command line directly
+config, _ = getConfigParser(prj_root, __file__) # we call this script from command line directly
 # hence __file__ is not a path, just the file name with extension
 
 # read params from config file
@@ -57,10 +56,30 @@ win_limit = config['training'].getint('window_limit')
 permute = config['training'].getint('permute') 
 permute = bool(permute>0)
 
-# network parameters
-modes = config['training'].getint('network_modes')
-width = config['training'].getint('network_width')
+# network
+network_name = config['training'].get('network_name')
+#network_dir_ = config['training'].get('network_dir')
+#network_dir = Path(network_dir_.replace('PRJ_ROOT', prj_root)) / network_name
+#network_path = network_dir / (network_name + '.py')
+network_root = Path( config['training'].get('network_dir').replace('PRJ_ROOT', prj_root) )
+network_dir = network_root.joinpath(network_name)
+network_path = network_dir.joinpath(network_name+'.py')
 
+network_config_path = config['training'].get('network_config')
+if network_config_path == 'default' or network_config_path == '':
+    #network_config_path = network_dir / (network_name + '.ini')
+    network_config_path = network_dir.joinpath(network_name + '.ini')
+else:
+    network_config_path = Path(network_config_path.replace('PRJ_ROOT', prj_root))
+
+# Load network
+# we want to load the package through potential subfolders
+# we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
+network_path_folders = network_path.parts
+# create package structure by concatenating folders with '.'
+network_path_struct = '.'.join(network_path_folders)[:-3] # append all parts and remove '.py' from file/package name
+network_mod = __import__(network_path_struct, fromlist=['*'])
+network = getattr(network_mod, network_name)
 
 # training parameters
 batch_size = config['training'].getint('batch_size')
@@ -95,8 +114,8 @@ print(f'\trequested training data points: {n_train}')
 print(f'\trequested training test points: {n_test}')
 print(f'\tinput steps: {T_in}')
 print(f'\toutput steps: {T_out}')
-print(f'\tmodes: {modes}')
-print(f'\twidth: {width}')
+# print(f'\tmodes: {modes}')
+# print(f'\twidth: {width}')
 print(f'\tbatch size: {batch_size}')
 print(f'\tepochs: {epochs}')
 print(f'\tlearning_rate: {learning_rate}')
@@ -206,19 +225,23 @@ print(f'\nModel name: {model_name}')
 
 # in case of generic gpu or cuda explicitly, check if available
 if dev == 'gpu' or 'cuda' in dev:
-  if torch.cuda.is_available():  
-    model = FNO2d(modes, modes, width, T_in).cuda()
-    dev  = torch.device('cuda')
-    #print(torch.cuda.current_device())
-    #print(torch.cuda.get_device_name(torch.cuda.current_device()))
+	if torch.cuda.is_available():
+		model = network(network_config_path, T_in).cuda()
+		dev = torch.device('cuda')
+        #print(torch.cuda.current_device())
+        #print(torch.cuda.get_device_name(torch.cuda.current_device()))
+	else:
+		print('GPU/Cuda not available, switching to CPU...')
+		model = network(network_config_path, T_in)
+		dev  = torch.device('cpu')
 else:
-  model = FNO2d(modes, modes, width, T_in)
-  dev  = torch.device('cpu')
+	model = network(network_config_path, T_in)
+	dev  = torch.device('cpu')
 
 print('Device:', dev)
 
 
-print(f'Nunmber of model\'s parameters: {count_params(model)}')
+print(f'Number of model\'s parameters: {count_params(model)}')
 optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 # optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9) # this would need to be modified to handle complex arithmetic
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
@@ -308,8 +331,8 @@ for ep in range(epochs):
     epoch_train_loss_step =  train_l2_step / n_train / T_out
     epoch_train_loss_full =  train_l2_full / n_train
 
-    epoch_test_loss_step =  test_l2_step / n_train / T_out
-    epoch_test_loss_full =  test_l2_full / n_train
+    epoch_test_loss_step =  test_l2_step / n_test / T_out
+    epoch_test_loss_full =  test_l2_full / n_test
 
     writer.add_scalar("Loss Step/train", epoch_train_loss_step, ep)
     writer.add_scalar("Loss Full/train", epoch_train_loss_full, ep)
@@ -402,7 +425,17 @@ config_model.add_section('training')
 for(each_key, each_val) in config.items('training'):
       config_model.set('training', each_key, each_val)
 
+# Add network detail
+network_config = openConfig(network_config_path, __file__)
+config_model.add_section('network_params_details')
+for (k, v) in network_config.items('network_params_details'):
+    config_model.set('network_params_details', k, v)
 
+config_model.add_section('network_parameters')
+config_model.set('network_parameters', 'network_modes', model.modes1)
+config_model.set('network_parameters', 'network_width', model.width)
+config_model.set('network_parameters', 'stacks_num', model.stacks_num)
+config_model.set('network_parameters', 'T_in', T_in)
 
 
 # then retrieve all content of dataset config file

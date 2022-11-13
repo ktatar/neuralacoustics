@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import operator
+from neuralacoustics.utils import openConfig
 
 import numpy as np
 #VIC this is the content of: https://github.com/zongyi-li/fourier_neural_operator/blob/master/fourier_2d_time.py
@@ -50,7 +51,8 @@ class SpectralConv2d_fast(nn.Module):
         return x
 
 class FNO2d(nn.Module):
-    def __init__(self, modes1, modes2, width, t_in):
+    # WYNN-mod: Add stacks_num input argument
+    def __init__(self, config_path, t_in):
         super(FNO2d, self).__init__()
 
         """
@@ -66,9 +68,12 @@ class FNO2d(nn.Module):
         output shape: (batchsize, x=64, y=64, c=1)
         """
 
-        self.modes1 = modes1
-        self.modes2 = modes2
-        self.width = width
+        # Parse config file
+        network_config = openConfig(config_path, __file__)
+        self.modes1 = network_config['network_parameters'].getint('network_modes')
+        self.modes2 = network_config['network_parameters'].getint('network_modes')
+        self.width = network_config['network_parameters'].getint('network_width')
+        self.stacks_num = network_config['network_parameters'].getint('stacks_num')
         self.padding = 2 # pad the domain if input is non-periodic
         
         #VIC-mod t_in is passed as parameter now, so that we can decide the number of input time steps
@@ -76,18 +81,12 @@ class FNO2d(nn.Module):
         self.fc0 = nn.Linear(t_in+2, self.width)
         # input channel is 12: the solution of the previous t_in timesteps + 2 locations (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
 
-        self.conv0 = SpectralConv2d_fast(self.width, self.width, self.modes1, self.modes2)
-        self.conv1 = SpectralConv2d_fast(self.width, self.width, self.modes1, self.modes2)
-        self.conv2 = SpectralConv2d_fast(self.width, self.width, self.modes1, self.modes2)
-        self.conv3 = SpectralConv2d_fast(self.width, self.width, self.modes1, self.modes2)
-        self.w0 = nn.Conv2d(self.width, self.width, 1)
-        self.w1 = nn.Conv2d(self.width, self.width, 1)
-        self.w2 = nn.Conv2d(self.width, self.width, 1)
-        self.w3 = nn.Conv2d(self.width, self.width, 1)
-        self.bn0 = torch.nn.BatchNorm2d(self.width)
-        self.bn1 = torch.nn.BatchNorm2d(self.width)
-        self.bn2 = torch.nn.BatchNorm2d(self.width)
-        self.bn3 = torch.nn.BatchNorm2d(self.width)
+        # WYNN-mod: A module list for stacking layers
+        self.conv_list = nn.ModuleList([SpectralConv2d_fast(
+            self.width, self.width, self.modes1, self.modes2) for i in range(self.stacks_num)])
+        self.w_list = nn.ModuleList(
+            [nn.Conv2d(self.width, self.width, 1) for i in range(self.stacks_num)])
+        self.bn_list = nn.ModuleList([nn.BatchNorm2d(self.width) for i in range(self.stacks_num)])
 
         self.fc1 = nn.Linear(self.width, 128)
         self.fc2 = nn.Linear(128, 1)
@@ -99,24 +98,13 @@ class FNO2d(nn.Module):
         x = x.permute(0, 3, 1, 2)
         # x = F.pad(x, [0,self.padding, 0,self.padding]) # pad the domain if input is non-periodic
 
-        x1 = self.conv0(x)
-        x2 = self.w0(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv1(x)
-        x2 = self.w1(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv2(x)
-        x2 = self.w2(x)
-        x = x1 + x2
-        x = F.gelu(x)
-
-        x1 = self.conv3(x)
-        x2 = self.w3(x)
-        x = x1 + x2
+        # WYNN-mod: Use iteration to forward pass x through the stacked layers
+        for i in range(len(self.conv_list)):
+            x1 = self.conv_list[i](x)
+            x2 = self.w_list[i](x)
+            x = x1 + x2
+            if i != len(self.conv_list) - 1:
+                x = F.gelu(x)
 
         # x = x[..., :-self.padding, :-self.padding] # pad the domain if input is non-periodic
         x = x.permute(0, 2, 3, 1)

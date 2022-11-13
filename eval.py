@@ -13,20 +13,23 @@ from pathlib import Path
 from timeit import default_timer
 
 # to load model structure
-from networks.FNO2d import FNO2d
+from networks.FNO2d.FNO2d import FNO2d
 # to load dataset
 from neuralacoustics.DatasetManager import DatasetManager
 # to plot data entries (specific series of domains)
 from neuralacoustics.data_plotter import plot2Domains, plot3Domains, plotWaveform
 # for PyTorch DataLoader determinism
 from neuralacoustics.utils import openConfig, getConfigParser, seed_worker, getProjectRoot
-
+# for operation count
+# from thop import profile, clever_format (not used)
+# from ptflops import get_model_complexity_info (not used)
+from fvcore.nn import FlopCountAnalysis, flop_count_table, flop_count_str
 
 # Retrieve PRJ_ROOT
 prj_root = getProjectRoot(__file__)
 
 # Get configuration parameters for evaluation
-config = getConfigParser(prj_root, __file__)
+config, _ = getConfigParser(prj_root, __file__)
 
 # Dataset
 dataset_name = config['evaluation'].get('dataset_name')
@@ -44,6 +47,8 @@ mic_y = config['evaluation'].getint('mic_y')
 dev = config['evaluation'].get('dev')
 seed = config['evaluation'].getint('seed')
 
+opcount = config['evaluation'].getint('opcount')
+
 # Model
 model_root = config['evaluation'].get('model_dir')
 model_root = model_root.replace('PRJ_ROOT', prj_root)
@@ -57,11 +62,22 @@ model_path = Path(model_root).joinpath(model_name).joinpath('checkpoints').joinp
 model_ini_path = Path(model_root).joinpath(model_name).joinpath(model_name+'.ini')
 model_config = openConfig(model_ini_path, __file__)
 
-network_mode = model_config['training'].getint('network_modes')
-network_width = model_config['training'].getint('network_width')
 T_in = model_config['training'].getint('T_in')
 T_out = model_config['training'].getint('T_out')
 
+# Load network object
+network_name = model_config['training'].get('network_name')
+network_dir_ = model_config['training'].get('network_dir')
+network_dir = Path(network_dir_.replace('PRJ_ROOT', prj_root)) / network_name
+network_path = network_dir / (network_name + '.py')
+
+network_config_path = model_ini_path
+
+# Load network
+network_path_folders = network_path.parts
+network_path_struct = '.'.join(network_path_folders)[:-3]
+network_mod = __import__(network_path_struct, fromlist=['*'])
+network = getattr(network_mod, network_name)
 
 # Determinism (https://pytorch.org/docs/stable/notes/randomness.html)
 torch.use_deterministic_algorithms(True)
@@ -80,6 +96,10 @@ g.manual_seed(seed)
 
 dataset_manager = DatasetManager(dataset_name, dataset_dir, False)
 u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry)
+
+if opcount:
+    u_opcount = dataset_manager.loadDataEntry(n=1, win=T_in+T_out, entry=0)
+    a_opcount = u_opcount[:, :, :, :T_in]
 
 # Get domain size
 u_shape = list(u.shape)
@@ -140,11 +160,11 @@ else :
 if dev == 'gpu' or 'cuda' in dev:
     assert(torch.cuda.is_available())
     dev = torch.device('cuda')
-    model = FNO2d(network_mode, network_mode, network_width, T_in).cuda()
+    model = network(network_config_path, T_in).cuda()
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
 else:
     dev = torch.device('cpu')
-    model = FNO2d(network_mode, network_mode, network_width, T_in)
+    model = network(network_config_path, T_in)
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
 
 
@@ -182,7 +202,7 @@ with torch.no_grad():
             label_waveform[i] = label[0, mic_x, mic_y, 0]
 
         domains = torch.stack([prediction, label, prediction - label])
-        titles = ['Prediction', 'Ground Truth', 'Diff']
+        titles = ['Prediction', 'Ground Truth', 'Difference']
         plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
                     figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
 
@@ -193,3 +213,22 @@ with torch.no_grad():
     if plot_waveform:
         plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
                     'Prediction', 'Ground Truth'])
+    
+    # Count operation number using the input
+    if opcount:
+        a_opcount = a_opcount.to(dev)
+        # pytorch-OpCounter
+        # flops, params = profile(model=model, inputs=(a_opcount,))
+        # print(f'Operation count:')
+        # print(f'\tflops: {flops}, params: {params}')
+
+        # flops-counter
+        # macs, params = get_model_complexity_info(model, (256, 256, 10), as_strings=True, print_per_layer_stat=True, verbose=True)
+        # print(f"Complexity: {macs}")
+        # print(f"Parameters: {params}")
+
+        # fvcore
+        flops_alt = FlopCountAnalysis(model, a_opcount)
+        print(f'Operation count:')
+        print(flop_count_table(flops_alt))
+        # print(flops_alt.by_module_and_operator())

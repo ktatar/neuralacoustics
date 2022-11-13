@@ -20,13 +20,17 @@ _Install required libraries in environment:
   
     conda install h5py 
     
-    onda install -c conda-forge tensorboard 
+    conda install -c conda-forge tensorboard
     
 (NOTE: missing CUDA installation, this will run code on CPU only)
 
 The argunment "-c" is the channel (i.e., repo). If any library is not available from Anaconda or from the specified channel, try with:
 
     pip install LIB_NAME
+
+_Optional libraries that need to be installed with pip:
+
+    pip install fvcore
 
 
 **USAGE**
