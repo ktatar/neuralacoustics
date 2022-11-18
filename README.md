@@ -14,7 +14,7 @@ The framework is composed of two pipelines:
 
 ### Dataset Generation
 
-The dataset generation pipeline stems from the necessity to generate musical acoustics datasets that could be easily employed in deep learning. It consists of a collection of Python implementations of numerical models of musical instruments, embedded in a modular structure that facilitates extensibility and allows for the application of a model-independent workflow. 
+The dataset generation pipeline stems from the necessity to generate musical acoustics datasets that could be easily employed in deep learning. It consists of a collection of Python implementations of numerical models of musical instruments, embedded in a modular structure that facilitates extensibility and allows for the application of a model-independent workflow.
 
 Following are the three main components for dataset generation:
 
@@ -54,7 +54,7 @@ Generated data could be extracted and loaded through a windowing alglorithm. The
 The Neuralacoustics framework also aims to facilitate the design of neural operators capable of solving acoustics PDEs. Currently, this part of the framework is comparatively less developed than the dataset generation pipeline.
 
 
-## Get Started
+## Quick Start
 
 ### Installation
 
@@ -71,28 +71,22 @@ The Neuralacoustics framework also aims to facilitate the design of neural opera
 	```
 	conda create --name YOUR_ENV python=3.7
 	conda activate YOUR_ENV
-	``` 
-  
+	```
+
 4. Install required libraries in environment:
-  
+
 	```
-	conda install pytorch torchvision torchaudio cpuonly -c pytorch 
-	  
-	conda install scikit-learn 
-	   
-	conda install scipy 
-	  
-	conda install matplotlib 
-	  
-	conda install h5py 
-	    
-	conda install -c conda-forge tensorboard
+    conda install pytorch torchvision torchaudio -c pytorch
+
+    conda install cudatoolkit=11.3 -c pytorch
+
+    conda install scipy h5py matplotlib -c pytorch
+
+	conda install tensorboard -c conda-forge
 	```
-	    
-	(NOTE: missing CUDA installation, this will run code on CPU only)
-	
-	The argunment "-c" is the channel (i.e., repo). If any library is not available from Anaconda or from the specified channel, try with:
-	
+
+    If any library is not available from Anaconda or from the specified channel, try with:
+
 	```
 	pip install LIB_NAME
 	```
@@ -102,6 +96,67 @@ The Neuralacoustics framework also aims to facilitate the design of neural opera
 	```
 	pip install fvcore
 	```
+
+### Generate and Visualize a Dataset
+
+1. Activate environment:
+
+	```
+	conda activate YOUR_ENV
+	```
+
+2. Under the root directory, run the following command to generate a new dataset using default settings:
+
+	```
+	python dataset_generate.py
+	```
+	
+	The output should look like this:
+	
+	```
+	Device: cpu
+	simulation duration:  0.00045351473922902497 s
+	        chunk 0, 70 dataset points  (up to batch 7 of 30)
+	        chunk 1, 70 dataset points  (up to batch 14 of 30)
+	        chunk 2, 70 dataset points  (up to batch 21 of 30)
+	        chunk 3, 70 dataset points  (up to batch 28 of 30)
+	        remainder, 20 dataset points (up to batch 30 of 30)
+	
+	Dataset dataset_4 saved in:
+	         datasets/dataset_0
+	total number of data points: 300 (out of 301 requested)
+	split in 4 chunks with 70 datapoints each
+	plus remainder file with 20 datapoints
+	
+	Elapsed time: 1.111738743999922 s
+	```
+
+3. Change the `dataset` parameter in section "dataset_visualization" of `default.ini` to the path of the newly generated dataset. In this case:
+
+	```
+	[dataset_visualization]
+	dataset = PRJ_ROOT/datasets/dataset_0
+	...
+	
+	```
+	
+	Leave the other parameters as default.
+
+4. Under the root directory, run the following command to visualize the first 10 data entries:
+
+	```
+	python dataset_visualize.py
+	```
+	
+	This will visualize the first 10 data entries in the dataset, each showing the evolution of a 64 x 64 2D membrane states computed by the numerical model.
+	
+	Here are some example frames of the visualization:
+	
+	![example1](figures/visualize_example6.png)
+	![example1](figures/visualize_example5.png)
+	![example1](figures/visualize_example1.png)
+
+## Usage
 
 ### Dataset generation
 
