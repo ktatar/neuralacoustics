@@ -152,9 +152,9 @@ The Neuralacoustics framework also aims to facilitate the design of neural opera
 	
 	Here are some example frames of the visualization:
 	
-	![example1](figures/visualize_example6.png)
-	![example1](figures/visualize_example5.png)
-	![example1](figures/visualize_example1.png)
+	<img src="figures/visualize_example6.png" alt="example1" width="30%"/>
+	<img src="figures/visualize_example5.png" alt="example2" width="30%"/>
+	<img src="figures/visualize_example1.png" alt="example3" width="30%"/>
 
 ## Usage
 
@@ -162,7 +162,7 @@ The Neuralacoustics framework also aims to facilitate the design of neural opera
 
 The following figure depicts the complete dataset generation workflow (folder names are in bold):
 
-![dataset_generation_workflow](figures/dataset_generation_workflow.png)
+<img src="figures/dataset_generation_workflow.png" alt="dataset_generation_workflow" width="80%"/>
 
 1. Locate a numerical model that represents the specific instrument the dataset will exemplify. Descriptions and data available in the models’ configuration files are in most cases enough to select the most appropriate script. 
 2. Choose a dataset generator that samples the numerical model of interest. In this step, the user shall adjust the parameters exposed in the generator’s configuration file, to make sure that the sampling procedure will result in data that well represent the instrument and its specific playing configuration. 
@@ -201,7 +201,7 @@ Here's an example of data visualization:
 
 The mechanism of the windowing algorithm is depicted in the figure below, where the same dataset entry is processed via two different sets of parameters, to exemplify the extraction of different data.
 
-![windowing](figures/window_algorithm.png)
+<img src="figures/window_algorithm.png" alt="windowing_mechanism" width="80%"/>
 
 The main windowing parameters for the windowing algorithm are: the size of the windows (`window_size`), the stride applied between consecutive windows (`window_stride`), and the dataset entry where the windows are applied (`first_datapoint`). To simply visualize the full simulations within each entry, the user can set either the size of the window equal to the number of time steps of each entry, or the stride equal to the size of the window.
 
