@@ -51,7 +51,21 @@ The pipeline supports visualization of generated data. The user can either use s
 Generated data could be extracted and loaded through a windowing alglorithm. The windowing algorithm is part of our datapoint extraction tool, which retrieves data points by means of repeatedly windowing the entries’ time series (collecting a data point per window). This windowing mechanism not only allows various options when visualizing a dataset, but also supports the customizability of dataset construction during the training of neural operators.
 
 ### Training and Evaluation
-The Neuralacoustics framework also aims to facilitate the design of neural operators capable of solving acoustics PDEs. Currently, this part of the framework is comparatively less developed than the dataset generation pipeline.
+The Neuralacoustics framework also aims to facilitate the design of neural operators capable of solving acoustics PDEs. Though this part of the framework is currently less developed compared to the dataset generation pipeline, basic training and evaluation pipelines have
+been completed.
+
+Neural operators are stored under the `networks` sub-directory. Similar to the numerical models and dataset generators, each neural operator is composed of a `.py` implementation script, containing the PyTorch model implementation, and `.ini` configuration file, containing the hyper-parameters of the model.
+
+The key features of the data generation pipeline also apply to the training and evaluation pipeline:
+
+* With highly **modular design**, the user can set up training tasks by just tuning the configuration file `default.ini` and running the `train.py` script under the root directory. The script will load all training configurations, including dataset construction, network selection, and optimization parameters, and carry out the training.
+
+* Training results are **reproducible** with a log file generated under the corresponding directory after the training terminates. The log file itself could be used as a unique configuration file for thoroughly replicating the training setup.
+
+* The evaluation script `eval.py` currently supports the **visualization** of a trained neural operator's prediction. It demonstrates the comparison between the predicted states and ground truth, with provides intuitive insights into a trained network’s performance. 
+
+
+
 
 
 ## Quick Start
@@ -156,6 +170,49 @@ The Neuralacoustics framework also aims to facilitate the design of neural opera
 	<img src="figures/visualize_example5.png" alt="example2" width="30%"/>
 	<img src="figures/visualize_example1.png" alt="example3" width="30%"/>
 
+### Training and Evaluation
+
+1. Specify the dataset for training with the parameter `dataset_name` under "training" section of `default.ini`. In this case we use the newly generated dataset, `dataset_0`:
+
+	```
+	[training]
+	dataset_name = dataset_0
+	dataset_dir = PRJ_ROOT/datasets
+	...
+	```
+
+1. Train a `FNO2d` neural operator:
+
+	```
+	python train.py
+	```
+	
+	The training checkpoints, together with the training output and log file, are stored under the path `models/<model_name>/`.
+	
+2. To evaluate a trained network, choose a dataset by setting the parameter `dataset_name`, and specify the model name (same as the name of the generated directory) with parameter `model_name`, both in section "evaluation" of `default.ini`.
+
+	```
+	[evaluation]
+	dataset_name = dataset_0
+	dataset_dir = PRJ_ROOT/datasets
+	entry = 250
+	...
+	model_name = <model_name>
+	...
+	```
+	
+3. Run the evaluation script:
+
+	```
+	python eval.py
+	```
+	
+	Here's an example frame of the visualization:
+	
+	<img src="figures/eval_example1.png" alt="example1" width="70%"/>
+	
+	
+
 ## Usage
 
 ### Dataset generation
@@ -190,10 +247,8 @@ There are three methods to visualize the calculated states by numerical models:
 
 2. Run `python dataset_visualize.py` also under the root directory to load and visualize data from an existing dataset. Through section "dataset_visualization" in `default.ini`, the user can specify the parameters for the windowing mechanism and the exact data entries to visualize (parameters `first_datapoint` and `n_visualize`).
 
-3. Ser the `dryrun` parameter is set to to 1 in section "dataset_generation" of `default.ini`, and run the `dataset_generate.py` script. It will directly compute a single dataset entry (i.e, a single simulation), and visualize it without saving it.
+3. Set the `dryrun` parameter is set to to 1 in section "dataset_generation" of `default.ini`, and run the `dataset_generate.py` script. It will directly compute a single dataset entry (i.e. a single simulation), and visualize it without saving it.
 
-Here's an example of data visualization:
-<!--TODO-->
 
 ### Data extraction with windowing
 
