@@ -76,7 +76,7 @@ def load_test(config_path, prj_root):
     c[0] = config['numerical_model_parameters'].getfloat('c') # speed of sound in the medium
     rho[0] = config['numerical_model_parameters'].getfloat('rho') # mean density of the medium
     mu[0] = config['numerical_model_parameters'].getfloat('mu') # dynamic viscosity of the medium
-    
+
     tube_x[0] = int(eval(config['numerical_model_parameters'].get('tube_x'))) # tube params (position, length, width)
     tube_y[0] = int(eval(config['numerical_model_parameters'].get('tube_y'))) 
     tube_length[0] = int(eval(config['numerical_model_parameters'].get('tube_length') ))

@@ -9,15 +9,17 @@ from neuralacoustics.data_plotter import plotDomain # to plot dryrun
 # ACM Transactions on Graphics 34: 134.
 
 info = {
-    'description': '2D implicit solver of mixed wave equation, for linear longitudinal waves (p = presusre, v = flow velocity vector), with perfect mathcing layer boundaries and acoustic parameters',
+    'description': '2D implicit solver of mixed wave equation, for non-linear longitudinal waves (p = pressure, v = flow velocity vector), with perfect mathcing layer boundaries and acoustic parameters; meant for high pressure propagation in pipes',
     'c': 'speed of sound in the medium',
     'rho': 'mean density of the medium',
-    'mu': 'dynamic viscosity of the medium'
+    'mu': 'dynamic viscosity of the medium',
+    'p0': 'atmospheric pressure, default is 101325 Pa',
+    'betac' : 'non-linear coefficiet, default is 1.2 (good estimate for air)'
 }
 
 # solver
-def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, pmlAttn = 0.5, disp = False, dispRate = 1, pause = 0):
-
+def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, pmlAttn = 0.5, p0 = -1, betac = -1, disp = False, dispRate = 1, pause = 0):
+    
     # display
     if disp:
         if dispRate > 1:
@@ -35,8 +37,21 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
     z_inv = mu/(rho*c)
     # Spatial resolution, same along x- and y-direction: CFL Condition
     ds = dt*c*math.sqrt(2.0)   
-    rhoCsqrDt_invDs = (rho*c*c*dt)/ds #TODO make tensor if c is made tensor
-    # rho*c*c  is Bulk modulus
+
+    rhoDt_invDs = rho*dt/ds
+
+    if p0 == -1:
+        p0 = 101325 # atmospheric pressure [Pa]
+    
+    if betac == -1:
+        betac = 1.2 # coefficient of non-linearity, value for air, taken from: 
+    # Cooper, Charles M., and Jonathan S. Abel. 
+    # "Digital simulation of “brassiness” and amplitude-dependent propagation speed in wind instruments." 
+    # Proc. 13th Int. Conf. on Digital Audio Effects (DAFx-10). 2010.
+
+    cmax = 1.1*c[0].item() # for stability #TODO make tensor if c is made tensor
+
+    cBetac_invP0 = c*betac/p0 #TODO make tensor if c is made tensor
 
     # this stuff MUST STAY
     # values from 0 to 3 shuld be returned as a map via a function
@@ -217,6 +232,9 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
     sigmaPrimeDt[..., pos_slice_right] = typeValues[types[..., pos_slice_right].long(), 1] # values for right neighbor
     sigmaPrimeDt[..., pos_slice_top]   = typeValues[types[..., pos_slice_top].long(), 1]   # values for top neighbor
 
+    # non linear term
+    rhoCCsqrDt_invDs = torch.zeros([b, updateFrameH, updateFrameW], device=dev)
+
 
     dir_slice_x = 0
     dir_slice_y = 1
@@ -235,6 +253,7 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
     betasqrDt_invRhoDs = torch.zeros([b, updateFrameH, updateFrameW, 2], device=dev) # last dim is vertical and horizontal direction
     betasqrDt_invRhoDs[..., dir_slice_x] = (minBeta[..., 0]*minBeta[..., 0]*dt)/(rho*ds)
     betasqrDt_invRhoDs[..., dir_slice_y] = (minBeta[..., 1]*minBeta[..., 1]*dt)/(rho*ds)
+
 
     # cache excitation helper tensors
 
@@ -319,8 +338,12 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
         CxVx = PV_N[:, updateStart:updateEndH, updateStart:updateEndW, pv_n_pos_slice_vx] - PV_N[:, updateStart:updateEndH, updateStart-1:updateEndW-1, pv_n_pos_slice_vx] # Vx - Vx_left                        
         CyVy = PV_N[:, updateStart:updateEndH, updateStart:updateEndW, pv_n_pos_slice_vy] - PV_N[:, updateStart+1:updateEndH+1, updateStart:updateEndW, pv_n_pos_slice_vy] # Vy - Vy_down
 
-        # STEP2: Calculate Pr_next                           
-        PV_Nplus1[:, updateStart:updateEndH, updateStart:updateEndW, pv_n_pos_slice_p] = ( PV_N[:, updateStart:updateEndH, updateStart:updateEndW, pv_n_pos_slice_p] - rhoCsqrDt_invDs*(CxVx+CyVy) ) / (1 + sigmaPrimeDt[..., pos_slice_cntr])
+        # STEP2: Calculate Pr_next
+        # start by preparing non-linear term
+        torch.clamp( c + (cBetac_invP0 * PV_N[:, updateStart:updateEndH, updateStart:updateEndW, pv_n_pos_slice_p]), 0, cmax, out=rhoCCsqrDt_invDs) # speed of sound plus deviation due to pressure
+        rhoCCsqrDt_invDs = rhoDt_invDs * rhoCCsqrDt_invDs * rhoCCsqrDt_invDs                          
+        # then compute P
+        PV_Nplus1[:, updateStart:updateEndH, updateStart:updateEndW, pv_n_pos_slice_p] = ( PV_N[:, updateStart:updateEndH, updateStart:updateEndW, pv_n_pos_slice_p] - rhoCCsqrDt_invDs*(CxVx+CyVy) ) / (1 + sigmaPrimeDt[..., pos_slice_cntr])
 
         # STEP3: Calculate Vx & Vy
         # To compute Vx we need calculate CxP = (del.P) = dPx/ds
@@ -375,4 +398,4 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
 
 
 def getInfo():
-  return info
+    return info
