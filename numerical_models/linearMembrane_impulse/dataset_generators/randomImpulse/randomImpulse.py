@@ -1,7 +1,7 @@
 import torch
 from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.utils import openConfig
-from neuralacoustics.utils import import_file
+from neuralacoustics.utils import import_fromScript
 
 N = -1
 B = -1
@@ -16,6 +16,7 @@ dryrun = -1
 dt = -1
 pause_sec = -1
 model = 0
+
 
 def load(config_path, ch, prj_root, pause):
     # in same style as load_test, this function writes the config variables to global variables.
@@ -72,7 +73,7 @@ def load(config_path, ch, prj_root, pause):
     # imports + loads model
 
     model_function_list = ['load, run']  # specify which functions to load.
-    model, model_config_path = import_file(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
+    model, model_config_path = import_fromScript(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
 
     model.load(model_config_path, prj_root)  # loads solver for model
 
@@ -93,15 +94,16 @@ def load(config_path, ch, prj_root, pause):
 
     return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path
 
+
 def generate_datasetBatch(dev, dryrun):
 
     if dryrun == 0:
         ex_x, ex_y, ex_amp = generate_randImpulse_tensors(B) 
-        inputs, sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp)
+        full_excitation, sol = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp)
     else:
         ex_x, ex_y, ex_amp = generate_randImpulse_tensors(1) #create rand tensors for excitation and medium
-        inputs, sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
-    return inputs, sol, sol_t
+        full_excitation, sol = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
+    return full_excitation, sol
 
 
 def generate_randImpulse_tensors(_B):
@@ -109,6 +111,7 @@ def generate_randImpulse_tensors(_B):
     rd_y = torch.randint(0, h-2, (_B,))
     rd_amp = torch.randn(_B)
     return rd_x, rd_y, rd_amp
+
 
 def getSolverInfoFromModel():
     return model.getSolverInfo()
