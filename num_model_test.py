@@ -1,7 +1,7 @@
 import torch
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
-from neuralacoustics.utils import import_file
+from neuralacoustics.utils import import_fromScript
 
 #most of this is lifted directly from the dataset_generator file
 
@@ -50,7 +50,7 @@ print('Device:', dev)
 # load and run model
 
 model_function_list = ['load_test', 'run_test']  # specify which functions to load.
-model, model_config_path = import_file(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
+model, model_config_path = import_fromScript(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
 
 model.load_test(model_config_path, prj_root)
 model.run_test(dev, dispRate = disp_rate ,pause = pause_sec)
