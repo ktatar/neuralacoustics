@@ -1,7 +1,7 @@
 import torch
 from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.utils import openConfig
-from neuralacoustics.utils import import_file
+from neuralacoustics.utils import import_fromScript
 
 N = -1
 B = -1
@@ -82,7 +82,7 @@ def load(config_path, ch, prj_root, pause):
     # imports + loads model
 
     model_function_list = ['load, run']  # specify which functions to load.
-    model, model_config_path = import_file(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
+    model, model_config_path = import_fromScript(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
 
     model.load(model_config_path, prj_root)  # loads solver for model
 
@@ -107,11 +107,11 @@ def load(config_path, ch, prj_root, pause):
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
         ex_x, ex_y, noise_submatrix = generate_randNoiseSubmatrix(B) 
-        inputs, sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix)
+        full_excitation, sol = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix)
     else:
         ex_x, ex_y, noise_submatrix = generate_randNoiseSubmatrix(1) #create rand tensors for excitation and medium
-        inputs, sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
-    return inputs, sol, sol_t
+        full_excitation, sol = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
+    return full_excitation, sol
 
 
 def generate_randNoiseSubmatrix(_B):
