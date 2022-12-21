@@ -6,7 +6,7 @@ from timeit import default_timer # to measure processing time
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
-from neuralacoustics.utils import import_file
+from neuralacoustics.utils import import_fromScript
 from neuralacoustics.utils import create_dataset_folder
 
 
@@ -63,7 +63,7 @@ print('Device:', dev)
 # import + load generator, extract parameters
 
 generator_function_list = ['load, generate_datasetBatch, getSolverInfoFromModel']  # specify which functions to load.
-generator, generator_config_path = import_file(prj_root, config_path, generator_path, generator_config_path, function_list=generator_function_list)
+generator, generator_config_path = import_fromScript(prj_root, config_path, generator_path, generator_config_path, function_list=generator_function_list)
 
 num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path = generator.load(generator_config_path, ch, prj_root, pause) #return number of batches, chunks, remainder, after loading
 
@@ -91,11 +91,11 @@ if dryrun == 0:
     time_duration = nsteps * dt
     print('simulation duration: ', time_duration, 's')
     
-    # initial conditions (inputs)
-    a = torch.zeros(ch_size, h, w, nsteps) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
+    # initial conditions (inputs) a 
+    excite = torch.zeros(ch_size, h-2, w-2, nsteps+1) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
     
-    # solutions
-    u = torch.zeros(ch_size, h, w, nsteps)  # +1 becase initial condition is saved at beginning of solution time series!
+    # solutions u 
+    sol = torch.zeros(ch_size, h, w, nsteps+1)  # +1 becase initial condition is saved at beginning of solution time series!
 
     ch_cnt = 0  # keeps track of # of chunks, datapoints during loop.
     n_cnt = 0
@@ -104,11 +104,11 @@ if dryrun == 0:
     for b in range(num_of_batches):
 
         # compute all steps in full batch
-        inputs, sol, sol_t = generator.generate_datasetBatch(dev, dryrun) #generates dataset.
-        
+        full_excitation, sol_b = generator.generate_datasetBatch(dev, dryrun) #generates dataset.
+
         # store
-        a[n_cnt:(n_cnt+B),...] = inputs # inputs
-        u[n_cnt:(n_cnt+B),...] = sol # results
+        excite[n_cnt:(n_cnt+B),...] = full_excitation # inputs
+        sol[n_cnt:(n_cnt+B),...] = sol_b # results
 
         n_cnt += B
 
@@ -116,19 +116,21 @@ if dryrun == 0:
         if (b+1) % batches_per_ch == 0: 
           file_name = dataset_name + '_ch' + str(ch_cnt).zfill(l_zeros) + '_' + str(n_cnt) + '.mat'
           dataset_path = dataset_folder.joinpath(file_name)
-          scipy.io.savemat(dataset_path, mdict={'a': a.cpu().numpy(), 'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
+          scipy.io.savemat(dataset_path, mdict={'excite': excite.cpu().numpy(), 'sol': sol.cpu().numpy()})
           #scipy.io.savemat(dataset_path, mdict={'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
           print( '\tchunk {}, {} dataset points  (up to batch {} of {})'.format(ch_cnt, ch_size, b+1, num_of_batches) )
           ch_cnt += 1
+
           # reset initial conditions, solutions and data point count
-          u = torch.zeros(ch_size, h, w, nsteps) # +1 becase initial condition is repeated at beginning of solution time series!
-          a = torch.zeros(ch_size, h, w, nsteps)
+          excite = torch.zeros(ch_size, h-2, w-2, nsteps+1)
+          sol = torch.zeros(ch_size, h, w, nsteps+1) 
+
           n_cnt = 0
           
         elif (b+1) == num_of_batches:
           file_name = dataset_name + '_rem_' + str(n_cnt)  + '.mat'
           dataset_path = dataset_folder.joinpath(file_name)
-          scipy.io.savemat(dataset_path, mdict={'a': a.cpu().numpy(), 'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
+          scipy.io.savemat(dataset_path, mdict={'excite': excite.cpu().numpy(), 'sol': sol.cpu().numpy()})
           #scipy.io.savemat(dataset_path, mdict={'u': u.cpu().numpy(), 't': sol_t.cpu().numpy()})
           print( '\tremainder, {} dataset points (up to batch {} of {})'.format(n_cnt, b+1, num_of_batches) )
           rem = 1
@@ -150,6 +152,7 @@ if dryrun == 0:
 
     simulation_duration = t2-t1
     print(f'\nElapsed time: {simulation_duration} s\n')
+    
     # ------------------------------------------------------------------------------------------------
 
     # save relevant bits from general config file + extra info from model config file into a new dataset config file (log)
