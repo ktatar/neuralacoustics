@@ -1,7 +1,7 @@
 import torch
 from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.utils import openConfig
-from neuralacoustics.utils import import_file
+from neuralacoustics.utils import import_fromScript
 
 # to store values from load()
 solver = 0  # where to load solver
@@ -90,11 +90,13 @@ def load_test(config_path, prj_root):
     
     return
 
+
 def _load(solver_path, prj_root, config_path):
     global solver
-    solver, temp_var = import_file(prj_root, config_path, solver_path)
+    solver, _ = import_fromScript(prj_root, config_path, solver_path)
 
     return    
+
 
 def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=False, dispRate=1, pause=0):
     # function will be called by generator, all params passed at runtime (does not use global variables)
@@ -122,9 +124,8 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=False
 
     #--------------------------------------------------------------
     # run solver
-    inputs, sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
-
-    return [inputs, sol, sol_t]
+    full_excitation, sol = solver.run(dev, dt, nsteps, b, w, h, _mu, _rho, _gamma, excite, torch.empty(0, 1), disp, dispRate, pause)
+    return [full_excitation, sol]
 
 
 def run_test(dev, dispRate=1, pause=0):
@@ -133,9 +134,9 @@ def run_test(dev, dispRate=1, pause=0):
     _disp = True
     
     # call run using those parameters+global variables, and return the result.
-    test_inputs, test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, _disp, dispRate, pause)
+    test_excite, test_sol = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, _disp, dispRate, pause)
     
-    return [test_inputs, test_sol, test_sol_t]
+    return [test_excite, test_sol]
 
 
 def getSolverInfo():
