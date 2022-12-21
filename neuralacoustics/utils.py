@@ -53,7 +53,7 @@ def seed_worker(worker_id):
     rd.seed(worker_seed)
 
 
-def import_file(prj_root, config_path, file_path, file_config_path='no_config', function_list=['*']):
+def import_fromScript(prj_root, config_path, file_path, file_config_path='no_config', function_list=['*']):
     # imports file (model/generator) and returns its associated config file path (if it has one)
 
     filename = Path(file_path).parts[-1]  # file will be in folder with the same name!
