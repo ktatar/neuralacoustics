@@ -1,7 +1,7 @@
 import torch
 from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.utils import openConfig
-from neuralacoustics.utils import import_file
+from neuralacoustics.utils import import_fromScript
 
 N = -1
 B = -1
@@ -16,6 +16,7 @@ dryrun = -1
 dt = -1
 pause_sec = -1
 model = 0
+
 
 def load(config_path, ch, prj_root, pause):
     # in same style as load_test, this function writes the config variables to global variables.
@@ -73,7 +74,7 @@ def load(config_path, ch, prj_root, pause):
     # imports + loads model
 
     model_function_list = ['load, run']  # specify which functions to load.
-    model, model_config_path = import_file(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
+    model, model_config_path = import_fromScript(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
 
     model.load(model_config_path, prj_root)  # loads solver for model
     
@@ -95,14 +96,15 @@ def load(config_path, ch, prj_root, pause):
 
     return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path
 
+
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
         ex_input_freq, ex_input_mag, ex_input_phase = generate_randWave_tensors(B) 
-        input, sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase) 
+        full_excitation, sol = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase) 
     else:
         ex_input_freq, ex_input_mag, ex_input_phase = generate_randWave_tensors(1) #create rand tensors for excitation and medium
-        input, sol, sol_t = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
-    return input, sol, sol_t
+        full_excitation, sol = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
+    return full_excitation, sol
 
 
 def generate_randWave_tensors(_B):
@@ -110,6 +112,7 @@ def generate_randWave_tensors(_B):
     rd_magnitude = torch.randn((_B,))
     rd_phase = torch.rand((_B,)) #rand numbers between [0, 1)
     return rd_input_freq, rd_magnitude, rd_phase
+
 
 def getSolverInfoFromModel():
     return model.getSolverInfo()
