@@ -92,7 +92,7 @@ if dryrun == 0:
     print('simulation duration: ', time_duration, 's')
     
     # initial conditions (inputs) a 
-    excite = torch.zeros(ch_size, h-2, w-2, nsteps+1) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
+    excite = torch.zeros(ch_size, h, w, nsteps+1) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
     
     # solutions u 
     sol = torch.zeros(ch_size, h, w, nsteps+1)  # +1 becase initial condition is saved at beginning of solution time series!
@@ -122,7 +122,7 @@ if dryrun == 0:
           ch_cnt += 1
 
           # reset initial conditions, solutions and data point count
-          excite = torch.zeros(ch_size, h-2, w-2, nsteps+1)
+          excite = torch.zeros(ch_size, h, w, nsteps+1)
           sol = torch.zeros(ch_size, h, w, nsteps+1) 
 
           n_cnt = 0
