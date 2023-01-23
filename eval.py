@@ -127,7 +127,8 @@ test_u = u[-n_test:, :, :, T_in:T_in+T_out]
 assert(S == test_u.shape[-2])
 assert(T_out == test_u.shape[-1])
 
-test_a = test_a.reshape(n_test, S, S, T_in)
+# test_a = test_a.reshape(n_test, S, S, T_in)
+test_a = test_a.reshape(n_test, S, S, 1, T_in).repeat([1, 1, 1, 40, 1])
 
 num_workers = 1  # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
 
@@ -187,6 +188,52 @@ model.eval()
 
 
 # Start evaluation
+# with torch.no_grad():
+#     for i, (features, label) in enumerate(test_loader):
+#         features = features.to(dev)
+#         label = label.to(dev)
+
+#         t1 = default_timer()
+#         prediction = model(features)
+#         t2 = default_timer()
+#         print(f'Timestep {i} of {timesteps}, inference computation time: {t2 - t1}s')
+
+#         if plot_waveform:
+#             pred_waveform[i] = prediction[0, mic_x, mic_y, 0]
+#             label_waveform[i] = label[0, mic_x, mic_y, 0]
+
+#         domains = torch.stack([prediction, label, prediction - label]) # prediction shape: [1, 64, 64, 1]
+#         titles = ['Prediction', 'Ground Truth', 'Difference']
+#         plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
+#                     figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+
+#         # auto-regressive
+#         features = torch.cat((features, prediction), -1)
+
+#     # Plot waveform
+#     if plot_waveform:
+#         plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
+#                     'Prediction', 'Ground Truth'])
+    
+#     # Count operation number using the input
+#     if opcount:
+#         a_opcount = a_opcount.to(dev)
+#         # pytorch-OpCounter
+#         # flops, params = profile(model=model, inputs=(a_opcount,))
+#         # print(f'Operation count:')
+#         # print(f'\tflops: {flops}, params: {params}')
+
+#         # flops-counter
+#         # macs, params = get_model_complexity_info(model, (256, 256, 10), as_strings=True, print_per_layer_stat=True, verbose=True)
+#         # print(f"Complexity: {macs}")
+#         # print(f"Parameters: {params}")
+
+#         # fvcore
+#         flops_alt = FlopCountAnalysis(model, a_opcount)
+#         print(f'Operation count:')
+#         print(flop_count_table(flops_alt))
+#         # print(flops_alt.by_module_and_operator())
+
 with torch.no_grad():
     for i, (features, label) in enumerate(test_loader):
         features = features.to(dev)
@@ -197,38 +244,10 @@ with torch.no_grad():
         t2 = default_timer()
         print(f'Timestep {i} of {timesteps}, inference computation time: {t2 - t1}s')
 
-        if plot_waveform:
-            pred_waveform[i] = prediction[0, mic_x, mic_y, 0]
-            label_waveform[i] = label[0, mic_x, mic_y, 0]
+        prediction = prediction.view(1, S, S, 40)
 
-        domains = torch.stack([prediction, label, prediction - label])
-        titles = ['Prediction', 'Ground Truth', 'Difference']
-        plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
-                    figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
-
-        # auto-regressive
-        features = torch.cat((features, prediction), -1)
-
-    # Plot waveform
-    if plot_waveform:
-        plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
-                    'Prediction', 'Ground Truth'])
-    
-    # Count operation number using the input
-    if opcount:
-        a_opcount = a_opcount.to(dev)
-        # pytorch-OpCounter
-        # flops, params = profile(model=model, inputs=(a_opcount,))
-        # print(f'Operation count:')
-        # print(f'\tflops: {flops}, params: {params}')
-
-        # flops-counter
-        # macs, params = get_model_complexity_info(model, (256, 256, 10), as_strings=True, print_per_layer_stat=True, verbose=True)
-        # print(f"Complexity: {macs}")
-        # print(f"Parameters: {params}")
-
-        # fvcore
-        flops_alt = FlopCountAnalysis(model, a_opcount)
-        print(f'Operation count:')
-        print(flop_count_table(flops_alt))
-        # print(flops_alt.by_module_and_operator())
+        for i in range(40):
+            domains = torch.stack([prediction[0, :, :, i], label[0, :, :, i], prediction[0, :, :, i] - label[0, :, :, i]])
+            titles = ['Prediction', 'Ground Truth', 'Difference']
+            plot3Domains(domains, pause=pause_sec,
+                        figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
