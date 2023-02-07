@@ -50,6 +50,23 @@ class SpectralConv2d_fast(nn.Module):
         x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1)))
         return x
 
+class MLP(nn.Module):
+    def __init__(self, in_channels, out_channels, mid_channels):
+        super(MLP, self).__init__()
+
+        """
+        MLP layer that does 1D convolution.    
+        """
+
+        self.mlp1 = nn.Conv2d(in_channels, mid_channels, 1)
+        self.mlp2 = nn.Conv2d(mid_channels, out_channels, 1)
+
+    def forward(self, x):
+        x = self.mlp1(x)
+        x = F.gelu(x)
+        x = self.mlp2(x)
+        return x
+
 class FNO2d(nn.Module):
     # WYNN-mod: Add stacks_num input argument
     def __init__(self, config_path, t_in):
@@ -74,7 +91,10 @@ class FNO2d(nn.Module):
         self.modes2 = network_config['network_parameters'].getint('network_modes')
         self.width = network_config['network_parameters'].getint('network_width')
         self.stacks_num = network_config['network_parameters'].getint('stacks_num')
-        self.padding = 2 # pad the domain if input is non-periodic
+        self.padding = network_config['network_parameters'].getint('padding') # pad the domain if input is non-periodic
+        self.mlp_on = network_config['network_parameters'].getboolean('mlp_on')
+        self.normalization_on = network_config['network_parameters'].getboolean('normalization_on')
+        self.mlp_q = network_config['network_parameters'].getboolean('mlp_q')
         
         #VIC-mod t_in is passed as parameter now, so that we can decide the number of input time steps
         #self.fc0 = nn.Linear(12, self.width)
@@ -82,35 +102,65 @@ class FNO2d(nn.Module):
         # input channel is 12: the solution of the previous t_in timesteps + 2 locations (u(t-10, x, y), ..., u(t-1, x, y),  x, y)
 
         # WYNN-mod: A module list for stacking layers
-        self.conv_list = nn.ModuleList([SpectralConv2d_fast(
-            self.width, self.width, self.modes1, self.modes2) for i in range(self.stacks_num)])
-        self.w_list = nn.ModuleList(
-            [nn.Conv2d(self.width, self.width, 1) for i in range(self.stacks_num)])
-        self.bn_list = nn.ModuleList([nn.BatchNorm2d(self.width) for i in range(self.stacks_num)])
-
-        self.fc1 = nn.Linear(self.width, 128)
-        self.fc2 = nn.Linear(128, 1)
+        self.conv_list = nn.ModuleList([SpectralConv2d_fast(self.width,
+                                                            self.width,
+                                                            self.modes1,
+                                                            self.modes2) 
+                                        for i in range(self.stacks_num)])
+        self.w_list = nn.ModuleList([nn.Conv2d(self.width, 
+                                               self.width,
+                                               1)
+                                     for i in range(self.stacks_num)])
+        # self.bn_list = nn.ModuleList([nn.BatchNorm2d(self.width) for i in range(self.stacks_num)])
+        self.mlp_list = None
+        if self.mlp_on:
+            self.mlp_list = nn.ModuleList([MLP(self.width,
+                                               self.width,
+                                               self.width)
+                                           for i in range(self.stacks_num)])
+        self.norm = None
+        if self.normalization_on:
+            self.norm = nn.InstanceNorm2d(self.width)
+        
+        if self.mlp_q:
+            self.q = MLP(self.width, 1, self.width * 4)
+        else:
+            self.fc1 = nn.Linear(self.width, 128)
+            self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x):
         grid = self.get_grid(x.shape, x.device)
         x = torch.cat((x, grid), dim=-1)
         x = self.fc0(x)
         x = x.permute(0, 3, 1, 2)
-        # x = F.pad(x, [0,self.padding, 0,self.padding]) # pad the domain if input is non-periodic
+        if self.padding > 0:
+            x = F.pad(x, [0,self.padding, 0,self.padding]) # pad the domain if input is non-periodic
 
         # WYNN-mod: Use iteration to forward pass x through the stacked layers
         for i in range(len(self.conv_list)):
-            x1 = self.conv_list[i](x)
-            x2 = self.w_list[i](x)
+            if self.normalization_on:
+                x1 = self.norm(self.conv_list[i](self.norm(x)))
+            else:
+                x1 = self.conv_list[i](x)
+
+            if self.mlp_on:
+                x1 = self.mlp_list[i](x1)
+
+            x2 = self.w_list[i](x) 
             x = x1 + x2
             if i != len(self.conv_list) - 1:
                 x = F.gelu(x)
-
-        # x = x[..., :-self.padding, :-self.padding] # pad the domain if input is non-periodic
-        x = x.permute(0, 2, 3, 1)
-        x = self.fc1(x)
-        x = F.gelu(x)
-        x = self.fc2(x)
+        
+        if self.padding > 0:
+            x = x[..., :-self.padding, :-self.padding] # pad the domain if input is non-periodic
+        if self.mlp_q:
+            x = self.q(x)
+            x = x.permute(0, 2, 3, 1)
+        else:
+            x = x.permute(0, 2, 3, 1)
+            x = self.fc1(x)
+            x = F.gelu(x)
+            x = self.fc2(x)
         return x
 
     def get_grid(self, shape, device):
