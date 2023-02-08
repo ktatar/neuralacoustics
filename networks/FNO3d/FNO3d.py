@@ -92,11 +92,10 @@ class FNO3d(nn.Module):
         self.modes2 = network_config['network_parameters'].getint('network_modes')
         self.modes3 = network_config['network_parameters'].getint('network_modes')
         self.width = network_config['network_parameters'].getint('network_width')
-        
-        # Pad the domain if input is non-periodic
-        self.padding = network_config['network_parameters'].getint('padding') 
-
         self.stacks_num = network_config['network_parameters'].getint('stacks_num')
+        self.padding = network_config['network_parameters'].getint('padding') # Pad the domain if input is non-periodic
+        self.mlp_on = network_config['network_parameters'].getboolean('mlp_on')
+        self.mlp_q = network_config['network_parameters'].getboolean('mlp_q')
 
         # WYNN-mod: t_in is passed as parameter
         self.p = nn.Linear(t_in+3, self.width)
@@ -108,36 +107,53 @@ class FNO3d(nn.Module):
                                                        self.modes2,
                                                        self.modes3)
                                         for i in range(self.stacks_num)])
-        self.mlp_list = nn.ModuleList([MLP(self.width,
-                                           self.width,
-                                           self.width)
-                                       for i in range(self.stacks_num)])
         self.w_list = nn.ModuleList([nn.Conv3d(self.width,
                                                self.width,
                                                1)
                                      for i in range(self.stacks_num)])
-        # output channel is 1: u(x, y)
-        self.q = MLP(self.width, 1, self.width * 4) #TODO: aligh self.width * 4 with t_out
+        self.mlp_list = None
+        if self.mlp_on:
+            self.mlp_list = nn.ModuleList([MLP(self.width,
+                                               self.width,
+                                               self.width)
+                                           for i in range(self.stacks_num)])
+        if self.mlp_q:
+            # output channel is 1: u(x, y)
+            self.q = MLP(self.width, 1, self.width * 4)
+        else:
+            self.fc1 = nn.Linear(self.width, 128)
+            self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x):
         grid = self.get_grid(x.shape, x.device)
         x = torch.cat((x, grid), dim=-1)
         x = self.p(x)
         x = x.permute(0, 4, 1, 2, 3) # WY: [batch_size, channel, width, height, T]
-        x = F.pad(x, [0,self.padding]) # pad the domain if input is non-periodic
+        if self.padding > 0:
+            x = F.pad(x, [0,self.padding]) # pad the domain if input is non-periodic
 
         # WYNN-mod: Use iteration to forward pass x through the stacked layers
         for i in range(len(self.conv_list)):
             x1 = self.conv_list[i](x)
-            x1 = self.mlp_list[i](x1)
+            if self.mlp_on:
+                x1 = self.mlp_list[i](x1)
+
             x2 = self.w_list[i](x)
             x = x1 + x2
             if i != len(self.conv_list) - 1:
                 x = F.gelu(x)
 
-        x = x[..., :-self.padding]
-        x = self.q(x)
-        x = x.permute(0, 2, 3, 4, 1) # pad the domain if input is non-periodic
+        if self.padding > 0:
+            x = x[..., :-self.padding]
+
+        if self.mlp_q:
+            x = self.q(x)
+            x = x.permute(0, 2, 3, 4, 1) # pad the domain if input is non-periodic
+        else:
+            x = x.permute(0, 2, 3, 4, 1)
+            x = self.fc1(x)
+            x = F.gelu(x)
+            x = self.fc2(x)
         return x
 
 
