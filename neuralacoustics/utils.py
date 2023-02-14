@@ -1,13 +1,3 @@
-import configparser, argparse # to read config from ini file
-from pathlib import Path # to properly handle paths and folders on every os
-
-import numpy as np
-import random as rd
-import scipy.io
-import h5py
-import torch
-import torch.nn as nn
-import operator
 from functools import reduce
 
 
@@ -345,3 +335,10 @@ def count_params(model):
         c += reduce(operator.mul, 
                     list(p.size()+(2,) if p.is_complex() else p.size()))
     return c
+
+
+
+def MFCC_dist(x, reconstructed_x, sampling_rate = 44100 n_fft = 2048, win_length = None, hop_length = 512, n_mels = 256, n_mfcc = 256):
+    MFCC_neural = transforms.MFCC(sample_rate=sampling_rate, n_mfcc=n_mfcc, melkwargs={"n_fft": n_fft, "hop_length": hop_length, "n_mels": n_mels, "mel_scale": "htk"})
+    Euc_dist = nn.PairwiseDistance(p=2)
+    return torch.sum(Euc_dist(MFCC_neural(x), MFCC_neural(reconstructed_x)), [0, 1]) # adds the distances in all dims to calculate a final number. 
