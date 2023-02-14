@@ -1,5 +1,4 @@
 from calendar import c
-import torch
 import numpy as np
 import matplotlib.pyplot as plt # to plot
 import matplotlib.colors as mcolors # to potentially use different color colormaps
