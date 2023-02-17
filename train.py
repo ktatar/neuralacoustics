@@ -72,6 +72,12 @@ if network_config_path == 'default' or network_config_path == '':
 else:
     network_config_path = Path(network_config_path.replace('PRJ_ROOT', prj_root))
 
+# Store a config instance for later logging use
+network_config = openConfig(network_config_path, __file__)
+
+# Read network inferrence type
+inference_type = network_config['network_details'].get('inference_type')
+
 # Load network
 # we want to load the package through potential subfolders
 # we can pretend we are in the PRJ_ROOT, for __import__ will look for the package from there
@@ -103,6 +109,9 @@ checkpoint_step = config['training'].getint('checkpoint_step')
 model_root_ = config['training'].get('model_dir') # keep original for config file
 model_root = model_root_.replace('PRJ_ROOT', prj_root)
 model_root = Path(model_root)
+
+load_model_name = config['training'].get('load_model_name')
+load_model_checkpoint = config['training'].get('load_model_checkpoint')
 
 seed = config['training'].getint('seed')
 
@@ -140,23 +149,48 @@ g.manual_seed(seed)
 #-------------------------------------------------------------------------------
 # dirs, paths, files
 
-# date time and local host name
-model_name = datetime.now().strftime('%y-%m-%d_%H-%M_'+socket.gethostname())
-model_dir = model_root.joinpath(model_name) # the directory contains an extra folder with same name of model, that will include both model and log file
+# Determine the checkpoint path if a loaded model is specified
+load_model_path = None
+if load_model_name != "":
+    load_model_path = Path(model_root).joinpath(load_model_name).joinpath(
+        'checkpoints').joinpath(load_model_checkpoint)
 
+    # Use the last checkpoint if the provided checkpoint is not valid
+    if not load_model_path.is_file():
+        load_checkpoint_path = Path(model_root).joinpath(
+            load_model_name).joinpath('checkpoints')
+        checkpoints = [x.name for x in list(load_checkpoint_path.glob('*'))]
+        
+        if len(checkpoints) < 1:
+            raise FileNotFoundError("No available checkpoint")
+
+        checkpoints.sort()
+        load_model_checkpoint = checkpoints[-1]
+        load_model_path = load_checkpoint_path.joinpath(load_model_checkpoint)
+    
+    print()
+    print(f"Load from model: {load_model_name}")
+    print(f"Load from checkpoint: {load_model_checkpoint}")
+
+# Determine saved model name and directory
+if load_model_name != "":
+    model_name = load_model_name + datetime.now().strftime('_%y-%m-%d_%H-%M_continued')
+else:
+    # date time and local host name
+    model_name = datetime.now().strftime('%y-%m-%d_%H-%M_'+socket.gethostname())
+
+model_dir = model_root.joinpath(model_name) # the directory contains an extra folder with same name of model, that will include both model and log file
+    
 # create folder where to save model and log file
 model_dir.mkdir(parents=True, exist_ok=True)
 
 model_path = model_dir.joinpath(model_name) # full path to model: dir+name
 
-
 # Create model checkpoint folder
 model_checkpoint_dir = model_dir.joinpath("checkpoints")
 model_checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-
-# log
-# txt file
+# Open txt file for logging
 f = open(str(model_path)+'.log', 'w')
 
 # tensorboard
@@ -199,6 +233,7 @@ test_u = u[-n_test:,:,:,T_in:T_in+T_out]
 assert(S == train_u.shape[-2])
 assert(T_out == train_u.shape[-1])
 
+# TODO: incorporate different input data form
 # train_a = train_a.reshape(n_train,S,S,T_in)
 # test_a = test_a.reshape(n_test,S,S,T_in)
 train_a = train_a.reshape(n_train,S,S,1,T_in).repeat([1,1,1,40,1])
@@ -246,11 +281,20 @@ print('Device:', dev)
 print(f'Number of model\'s parameters: {count_params(model)}')
 optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 # optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9) # this would need to be modified to handle complex arithmetic
+# TODO: incorporate different scheduler
 # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
 iterations = epochs * (n_train // batch_size)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=iterations)
 
-
+# Load previous checkpoint
+prev_ep = 0
+if load_model_name != "":
+    state_dict = torch.load(load_model_path)
+    model.load_state_dict(state_dict['model_state_dict'])
+    optimizer.load_state_dict(state_dict['optimizer_state_dict'])
+    scheduler.load_state_dict(state_dict['scheduler_state_dict'])
+    prev_ep = state_dict['epoch'] + 1
+print(scheduler.state_dict())
 #-------------------------------------------------------------------------------
 # train!
 
@@ -320,6 +364,7 @@ for ep in range(epochs):
     # test
     test_l2_step = 0
     test_l2_full = 0
+    model.eval()
     # with torch.no_grad():
     #     for xx, yy in test_loader:
     #         loss = 0
@@ -340,7 +385,7 @@ for ep in range(epochs):
 
     #         test_l2_step += loss.item()
     #         test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
-    model.eval()
+    
     with torch.no_grad():
         for xx, yy in test_loader:
             loss = 0
@@ -364,27 +409,28 @@ for ep in range(epochs):
     epoch_test_loss_step =  test_l2_step / n_test / T_out
     epoch_test_loss_full =  test_l2_full / n_test
 
-    writer.add_scalar("Loss Step/train", epoch_train_loss_step, ep)
-    writer.add_scalar("Loss Full/train", epoch_train_loss_full, ep)
+    writer.add_scalar("Loss Step/train", epoch_train_loss_step, ep + prev_ep)
+    writer.add_scalar("Loss Full/train", epoch_train_loss_full, ep + prev_ep)
 
-    writer.add_scalar("Loss Step/test", epoch_test_loss_step, ep)
-    writer.add_scalar("Loss Full/test", epoch_test_loss_full, ep)
+    writer.add_scalar("Loss Step/test", epoch_test_loss_step, ep + prev_ep)
+    writer.add_scalar("Loss Full/test", epoch_test_loss_full, ep + prev_ep)
 
     # log file and print
     # not using same string due to formatting visualization differences
     f.write('\n')
-    log_str = '{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}'.format(ep, t2-t1, epoch_train_loss_step, epoch_train_loss_full, epoch_test_loss_step, epoch_test_loss_full)
+    log_str = '{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}'.format(ep + prev_ep, t2-t1, epoch_train_loss_step, epoch_train_loss_full, epoch_test_loss_step, epoch_test_loss_full)
     f.write(log_str)
-    print(f'{ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
+    print(f'{ep + prev_ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
 
 
     #--------------------------------------------------------
     # Save model, optimizer and scheduler status every checkpoint_step epochs
     if checkpoint_step >= 1 and (ep + 1) % checkpoint_step == 0:
-        save_model_name = model_name + '_ep{:04d}'.format(ep)
+        save_model_name = model_name + '_ep{:04d}'.format(ep + prev_ep) + '.pt'
         save_model_path = model_checkpoint_dir.joinpath(save_model_name)
+        print(scheduler.state_dict())
         torch.save({
-            'epoch': ep,
+            'epoch': ep + prev_ep,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
@@ -410,10 +456,10 @@ print(f"Elapsed time: {train_duration} s")
 #-------------------------------------------------------------------------------
 # Save the final model checkpoint, only when it hasn't been saved yet
 if checkpoint_step < 1 or (checkpoint_step >= 1 and epochs % checkpoint_step != 0):
-    save_model_name = model_name + '_ep{:04d}'.format(epochs-1)
+    save_model_name = model_name + '_ep{:04d}'.format(epochs-1+prev_ep) + '.pt'
     save_model_path = model_checkpoint_dir.joinpath(save_model_name)
     torch.save({
-        'epoch': epochs - 1,
+        'epoch': epochs - 1 + prev_ep,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
@@ -456,18 +502,14 @@ for(each_key, each_val) in config.items('training'):
       config_model.set('training', each_key, each_val)
 
 # Add network detail
-network_config = openConfig(network_config_path, __file__)
 config_model.add_section('network_params_details')
+config_model.add_section('network_parameters')
 for (k, v) in network_config.items('network_params_details'):
     config_model.set('network_params_details', k, v)
+for (k, v) in network_config.items('network_parameters'):
+    config_model.set('network_parameters', k, v)
 
-config_model.add_section('network_parameters')
-config_model.set('network_parameters', 'network_modes', model.modes1)
-config_model.set('network_parameters', 'network_width', model.width)
-config_model.set('network_parameters', 'stacks_num', model.stacks_num)
 config_model.set('network_parameters', 'T_in', T_in)
-# TODO: Add padding
-
 
 # then retrieve all content of dataset config file
 dataset_dir = Path(dataset_dir)
