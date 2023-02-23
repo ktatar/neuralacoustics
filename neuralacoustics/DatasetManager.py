@@ -72,7 +72,7 @@ class DatasetManager:
         print(f'\tPoints requested: {n}')
         assert(p_total >= n)
 
-    def loadData(self, n, win, stride=0, win_lim=0, start_ch=0, permute=False, field='excite'):
+    def loadData(self, n, win, stride=0, win_lim=0, start_ch=0, permute=False, field='sol'):
         """Load a subsection of dataset for training."""
         # Check and modify arguments
         start_ch, win, stride = self.checkArgs(start_ch, win, stride, win_lim)
