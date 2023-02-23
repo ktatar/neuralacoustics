@@ -86,7 +86,8 @@ u = dataset_manager.loadData(
   stride=stride,
   win_lim=limit,
   start_ch=start_ch,
-  permute=permute
+  permute=permute,
+  field='sol'
 )
 
 shape = list(u.shape)
