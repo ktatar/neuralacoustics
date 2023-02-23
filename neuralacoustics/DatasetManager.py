@@ -130,7 +130,7 @@ class DatasetManager:
 
         return u
 
-    def loadDataEntry(self, n, win, entry):
+    def loadDataEntry(self, n, win, entry, field='sol'):
         """Load data from one single data entry."""
         # Check validity of entry index
         if entry >= self.ch * self.ch_size + self.rem_size or entry < 0:
@@ -153,7 +153,7 @@ class DatasetManager:
 
         # Load the target entry
         dataloader = MatReader(self.files[file_index])
-        uu = dataloader.read_field('u')
+        uu = dataloader.read_field(field)
         for tt in range(n):
             u[cnt, ...] = uu[entry_in_file, :, :, tt:tt+win]
             cnt += 1
