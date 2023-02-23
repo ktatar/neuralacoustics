@@ -72,7 +72,7 @@ class DatasetManager:
         print(f'\tPoints requested: {n}')
         assert(p_total >= n)
 
-    def loadData(self, n, win, stride=0, win_lim=0, start_ch=0, permute=False):
+    def loadData(self, n, win, stride=0, win_lim=0, start_ch=0, permute=False, field='excite'):
         """Load a subsection of dataset for training."""
         # Check and modify arguments
         start_ch, win, stride = self.checkArgs(start_ch, win, stride, win_lim)
@@ -98,7 +98,7 @@ class DatasetManager:
         cnt = 0
         for f in range(full_files):
             dataloader = MatReader(self.files[f + start_ch])
-            uu = dataloader.read_field('u')
+            uu = dataloader.read_field(field)
 
             # Unroll all entries with moving window
             for e in range(self.ch_size):
@@ -111,7 +111,7 @@ class DatasetManager:
         if (extra_datapoints > 0):
             print(f'\tPlus {extra_datapoints} points from one other file')
             dataloader = MatReader(self.files[start_ch + full_files])
-            uu = dataloader.read_field('u')
+            uu = dataloader.read_field(field)
             data_entry = 0
             while (cnt < n):
                 for tt in range(p_num):
