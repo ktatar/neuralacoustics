@@ -65,6 +65,9 @@ model_config = openConfig(model_ini_path, __file__)
 T_in = model_config['training'].getint('T_in')
 T_out = model_config['training'].getint('T_out')
 
+# Load normalization info
+normalize = model_config['training'].getint('normalize_data')
+
 # Load network object
 network_name = model_config['training'].get('network_name')
 network_dir_ = model_config['training'].get('network_dir')
@@ -89,6 +92,40 @@ torch.manual_seed(seed)
 g = torch.Generator()
 g.manual_seed(seed)
 
+#---------------------------------------------------------------------
+# Load model
+print(f"Load model: {model_name}")
+
+# Use the last checkpoint if the provided checkpoint is not valid
+if not model_path.is_file():
+    checkpoint_path = Path(model_root).joinpath(model_name).joinpath('checkpoints')
+    checkpoints = [x.name for x in list(checkpoint_path.glob('*'))]
+    checkpoints.sort()
+    model_path = checkpoint_path.joinpath(checkpoints[-1])
+else :
+    print(f"\tcheckpoint: {checkpoint_name}")
+
+a_normalizer = None
+y_normalizer = None
+if normalize:
+    a_normalizer = torch.load(model_path)['a_normalizer']
+    y_normalizer = torch.load(model_path)['y_normalizer']
+
+if dev == 'gpu' or 'cuda' in dev:
+    assert(torch.cuda.is_available())
+    dev = torch.device('cuda')
+    model = network(network_config_path, T_in).cuda()
+    model.load_state_dict(torch.load(model_path)['model_state_dict'])
+    if normalize:
+        a_normalizer.cuda()
+        y_normalizer.cuda()
+else:
+    dev = torch.device('cpu')
+    model = network(network_config_path, T_in)
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
+    if normalize:
+        a_normalizer.cpu()
+        y_normalizer.cpu()
 
 
 #---------------------------------------------------------------------
@@ -127,6 +164,11 @@ test_u = u[-n_test:, :, :, T_in:T_in+T_out]
 assert(S == test_u.shape[-2])
 assert(T_out == test_u.shape[-1])
 
+# Normalize input data 
+if normalize:
+    print("Normalizing input data...")
+    test_a = a_normalizer.encode(test_a)
+
 # test_a = test_a.reshape(n_test, S, S, T_in)
 test_a = test_a.reshape(n_test, S, S, 1, T_in).repeat([1, 1, 1, 40, 1])
 
@@ -140,33 +182,6 @@ test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a,
                                           worker_init_fn=seed_worker,
                                           generator=g)
 #print(f'Test input shape: {test_a.shape}, output shape: {test_u.shape}')
-
-
-
-#---------------------------------------------------------------------
-# Load model
-print(f"Load model: {model_name}")
-
-# Use the last checkpoint if the provided checkpoint is not valid
-if not model_path.is_file():
-    checkpoint_path = Path(model_root).joinpath(model_name).joinpath('checkpoints')
-    checkpoints = [x.name for x in list(checkpoint_path.glob('*'))]
-    checkpoints.sort()
-    model_path = checkpoint_path.joinpath(checkpoints[-1])
-else :
-    print(f"\tcheckpoint: {checkpoint_name}")
-
-
-
-if dev == 'gpu' or 'cuda' in dev:
-    assert(torch.cuda.is_available())
-    dev = torch.device('cuda')
-    model = network(network_config_path, T_in).cuda()
-    model.load_state_dict(torch.load(model_path)['model_state_dict'])
-else:
-    dev = torch.device('cpu')
-    model = network(network_config_path, T_in)
-    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
 
 
 
@@ -245,6 +260,9 @@ with torch.no_grad():
         print(f'Timestep {i} of {timesteps}, inference computation time: {t2 - t1}s')
 
         prediction = prediction.view(1, S, S, 40)
+
+        if normalize:
+            prediction = y_normalizer.decode(prediction)
 
         for i in range(40):
             domains = torch.stack([prediction[0, :, :, i], label[0, :, :, i], prediction[0, :, :, i] - label[0, :, :, i]])

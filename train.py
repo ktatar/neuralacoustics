@@ -13,6 +13,7 @@ from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import count_params
+from neuralacoustics.utils import UnitGaussianNormalizer
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
 from torch.utils.tensorboard import SummaryWriter
 
@@ -103,6 +104,9 @@ scheduler_step = config['training'].getint('scheduler_step')
 scheduler_gamma = config['training'].getfloat('scheduler_gamma')
 
 checkpoint_step = config['training'].getint('checkpoint_step')
+
+# Normalization
+normalize = config['training'].getint('normalize_data')
 
 
 # misc parameters
@@ -229,6 +233,17 @@ train_u = u[:n_train,:,:,T_in:T_in+T_out]
 test_a = u[-n_test:,:,:,:T_in]
 test_u = u[-n_test:,:,:,T_in:T_in+T_out]
 
+a_normalizer = None
+y_normalizer = None
+if normalize:
+    print("Normalizing input and output data...")
+    a_normalizer = UnitGaussianNormalizer(train_a)
+    train_a = a_normalizer.encode(train_a)
+    test_a = a_normalizer.encode(test_a)
+
+    y_normalizer = UnitGaussianNormalizer(train_u)
+    train_u = y_normalizer.encode(train_u)
+
 #print(train_u.shape, test_u.shape)
 assert(S == train_u.shape[-2])
 assert(T_out == train_u.shape[-1])
@@ -262,18 +277,24 @@ print(f'\nModel name: {model_name}')
 
 # in case of generic gpu or cuda explicitly, check if available
 if dev == 'gpu' or 'cuda' in dev:
-	if torch.cuda.is_available():
-		model = network(network_config_path, T_in).cuda()
-		dev = torch.device('cuda')
+    if torch.cuda.is_available():
+        model = network(network_config_path, T_in).cuda()
+        dev = torch.device('cuda')
+        if normalize:
+            y_normalizer.cuda()
         #print(torch.cuda.current_device())
         #print(torch.cuda.get_device_name(torch.cuda.current_device()))
-	else:
-		print('GPU/Cuda not available, switching to CPU...')
-		model = network(network_config_path, T_in)
-		dev  = torch.device('cpu')
+    else:
+        print('GPU/Cuda not available, switching to CPU...')
+        model = network(network_config_path, T_in)
+        dev  = torch.device('cpu')
+        if normalize:
+            y_normalizer.cpu()
 else:
-	model = network(network_config_path, T_in)
-	dev  = torch.device('cpu')
+    model = network(network_config_path, T_in)
+    dev  = torch.device('cpu')
+    if normalize:
+        y_normalizer.cpu()
 
 print('Device:', dev)
 
@@ -294,7 +315,6 @@ if load_model_name != "":
     optimizer.load_state_dict(state_dict['optimizer_state_dict'])
     scheduler.load_state_dict(state_dict['scheduler_state_dict'])
     prev_ep = state_dict['epoch'] + 1
-print(scheduler.state_dict())
 #-------------------------------------------------------------------------------
 # train!
 
@@ -352,6 +372,10 @@ for ep in range(epochs):
         pred = model(xx)
         pred = pred.view(batch_size, S, S, 40)
 
+        if normalize:
+            pred = y_normalizer.decode(pred)
+            yy = y_normalizer.decode(yy)
+
         l2_full = myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
         l2_full.backward()
         optimizer.step()
@@ -393,6 +417,8 @@ for ep in range(epochs):
             yy = yy.to(dev)
 
             pred = model(xx).view(batch_size, S, S, 40)
+            if normalize:
+                pred = y_normalizer.decode(pred)
             test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
 
     t2 = default_timer()
@@ -428,12 +454,13 @@ for ep in range(epochs):
     if checkpoint_step >= 1 and (ep + 1) % checkpoint_step == 0:
         save_model_name = model_name + '_ep{:04d}'.format(ep + prev_ep) + '.pt'
         save_model_path = model_checkpoint_dir.joinpath(save_model_name)
-        print(scheduler.state_dict())
         torch.save({
             'epoch': ep + prev_ep,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
+            'a_normalizer': a_normalizer,
+            'y_normalizer': y_normalizer,
         },
         save_model_path)
         print(f"\t----> checkpoint {save_model_name} saved")
@@ -463,6 +490,8 @@ if checkpoint_step < 1 or (checkpoint_step >= 1 and epochs % checkpoint_step != 
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'scheduler_state_dict': scheduler.state_dict(),
+        'a_normalizer': a_normalizer,
+        'y_normalizer': y_normalizer,
     },
     save_model_path)
     print(f"----> Final checkpoint {save_model_name} saved")
