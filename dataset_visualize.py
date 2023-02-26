@@ -87,7 +87,6 @@ u = dataset_manager.loadData(
   n=n,
   T_in=T_in,
   T_out=T_out,
-  win=window,
   stride=stride,
   win_lim=limit,
   start_ch=start_ch,
