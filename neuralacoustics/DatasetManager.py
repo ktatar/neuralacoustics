@@ -40,7 +40,7 @@ class DatasetManager:
         self.files.remove(self.config_path)  # ignore config file
         self.files = sorted(self.files)
 
-    def checkArgs(self, start_ch, T_in, T_out win, stride, win_lim):
+    def checkArgs(self, start_ch, T_in, T_out, stride, win_lim):
         """
         Check the validity of data query arguments and 
         modify them if necessary.
