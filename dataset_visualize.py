@@ -37,8 +37,11 @@ n = config['dataset_visualization'].getint('n_load')
 # in case we want to skip some chunk files to access points that are further aways without filling up all RAM
 start_ch = config['dataset_visualization'].getint('start_ch') 
 
-# size of window, i.e., length of each data point
-window = config['dataset_visualization'].getint('window_size')
+# T_in = # of inputs, T_out = # of outputs
+# determines size of window, i.e., length of each data point
+# window = T_in + T_out
+T_in = config['dataset_visualization'].getint('T_in')
+T_out = config['dataset_visualization'].getint('T_out')
 # zero means all available time steps, it is handled automatically in loadDataset() 
 
 # offset between consecutive windows
@@ -82,12 +85,13 @@ torch.manual_seed(seed)
 dataset_manager = DatasetManager(dataset_name, dataset_dir)
 u = dataset_manager.loadData(
   n=n,
+  T_in=T_in,
+  T_out=T_out,
   win=window,
   stride=stride,
   win_lim=limit,
   start_ch=start_ch,
   permute=permute,
-  field='sol'
 )
 
 shape = list(u.shape)
