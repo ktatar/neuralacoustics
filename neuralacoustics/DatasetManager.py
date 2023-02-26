@@ -48,7 +48,7 @@ class DatasetManager:
         # if either T_in or T_out are 0, or if the window is larger than # of timesteps
         # set them both to default values (half of full timesteps each)
         win = T_in + T_out
-        if (T_in == 0 or T_out==0 or win > self.T):
+        if (T_in <= 0 or T_out<=0 or win > self.T):
             T_in = self.T//2
             T_out = self.T-T_in
             win = T_in + T_out
