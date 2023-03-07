@@ -130,18 +130,23 @@ class DatasetManager:
 
         return u
 
-    def loadDataEntry(self, n, win, entry):
+    def loadDataEntry(self, n, win, entry, offset=0):
         """Load data from one single data entry."""
         # Check validity of entry index
         if entry >= self.ch * self.ch_size + self.rem_size or entry < 0:
             raise AssertionError("Invalid entry index")
+        
+        # Check validity of offset value
+        if offset < 0 or offset > self.T - win:
+            raise AssertionError("Invalid offset value")
 
         # Set n as the maximum timesteps if specified as -1
         if n == -1:
             n = self.T + 1 - win
 
         # Check whether request is out of bount
-        assert (n + win <= self.T + 1)
+        if offset + n + win > self.T + 1:
+            raise AssertionError("Requested windows go beyond data entry bound")
 
         # Prepare tensor where to load requested data points
         u = torch.zeros(n, self.h, self.w, win)
@@ -155,7 +160,7 @@ class DatasetManager:
         dataloader = MatReader(self.files[file_index])
         uu = dataloader.read_field('u')
         for tt in range(n):
-            u[cnt, ...] = uu[entry_in_file, :, :, tt:tt+win]
+            u[cnt, ...] = uu[entry_in_file, :, :, offset+tt:offset+tt+win]
             cnt += 1
 
         return u

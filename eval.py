@@ -38,6 +38,7 @@ dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
 
 # Evaluation setting
 entry = config['evaluation'].getint('entry')
+offset = config['evaluation'].getint('offset')
 timesteps = config['evaluation'].getint('timesteps')
 pause_sec = config['evaluation'].getfloat('pause_sec')
 
@@ -116,23 +117,17 @@ if dev == 'gpu' or 'cuda' in dev:
     dev = torch.device('cuda')
     model = network(network_config_path, T_in).cuda()
     model.load_state_dict(torch.load(model_path)['model_state_dict'])
-    if normalize:
-        a_normalizer.cuda()
-        y_normalizer.cuda()
 else:
     dev = torch.device('cpu')
     model = network(network_config_path, T_in)
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
-    if normalize:
-        a_normalizer.cpu()
-        y_normalizer.cpu()
 
 
 #---------------------------------------------------------------------
 # load entry from dataset [test set]
 
 dataset_manager = DatasetManager(dataset_name, dataset_dir, False)
-u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry)
+u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry, offset=offset)
 
 if opcount:
     u_opcount = dataset_manager.loadDataEntry(n=1, win=T_in+T_out, entry=0)
@@ -249,6 +244,11 @@ model.eval()
 #         print(flop_count_table(flops_alt))
 #         # print(flops_alt.by_module_and_operator())
 
+if normalize:
+    if dev == torch.device('cuda'):
+        y_normalizer.cuda()
+    else:
+        y_normalizer.cpu()
 with torch.no_grad():
     for i, (features, label) in enumerate(test_loader):
         features = features.to(dev)
