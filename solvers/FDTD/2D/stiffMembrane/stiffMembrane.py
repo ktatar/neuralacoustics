@@ -3,10 +3,6 @@ import math # sqrt
 from neuralacoustics.data_plotter import plotDomain # to plot dryrun
 
 def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp=False, dispRate=1, pause=0):
-
-    # excitation
-    full_excitation = torch.zeros([b, h-2, w-2, nsteps+1], device=dev) 
-    full_excitation[..., 1:] = excite[...] # copy excitation to tensor on device 
     
     # display
     if disp:
@@ -55,10 +51,6 @@ def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp
     frameW = domainW+2 # 2 is for layers of outside cells, left and right
     frameH = domainH+2 # 2 is for layers of outside cells, top and bottom
 
-    # VIC temp intial condition
-    #ex_x += 2
-    #ex_y += 2
-
     # only inner part of frame will be updated
     updateFrameW = frameW-4 # no outside layers, nor rim!
     updateFrameH = frameH-4 # no outside layers, nor rim!
@@ -102,6 +94,12 @@ def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp
 
     # displacement
     w = torch.zeros([b, frameH, frameW, 3], device=dev) # last dimension contains: w prev, w now, w next
+    
+    # excitation
+    full_excitation = torch.zeros([b, frameH, frameW, nsteps+1], device=dev) 
+    full_excitation[:, updateStartH:updateEndH, updateStartW:updateEndW, 1:] = excite[...] # copy excitation to tensor on device 
+    
+    # solution
     sol = torch.zeros([b, frameH, frameW, nsteps+1], device=dev) # to save solutions
 
     # current and previous displacements for calulations, only on part of domain that is updated
