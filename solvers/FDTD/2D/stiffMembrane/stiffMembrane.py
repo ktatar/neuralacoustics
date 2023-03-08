@@ -5,7 +5,7 @@ from neuralacoustics.data_plotter import plotDomain # to plot dryrun
 def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp=False, dispRate=1, pause=0):
 
     # excitation
-    full_excitation = torch.zeros([b, h, w, nsteps+1], device=dev) 
+    full_excitation = torch.zeros([b, h-2, w-2, nsteps+1], device=dev) 
     full_excitation[..., 1:] = excite[...] # copy excitation to tensor on device 
     
     # display
@@ -160,8 +160,8 @@ def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp
 
         # add excitation to w:
         # only adding excitation to the initally specified domain
-        w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_now]  += full_excitation[:, updateStartH:updateEndH, updateStartW:updateEndW, step+1] # last dimension contains: w prev, w now, w next
-
+        w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_now]  += full_excitation[..., step+1] # last dimension contains: w prev, w now, w next
+       
         # neighbors, in space and/or time
         wn_l = w[:, updateStartH:updateEndH,      updateStartW-1:updateEndW-1, time_slice_now]
         wn_r = w[:, updateStartH:updateEndH,      updateStartW+1:updateEndW+1, time_slice_now]
