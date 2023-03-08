@@ -158,7 +158,7 @@ def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp
 
         # add excitation to w:
         # only adding excitation to the initally specified domain
-        w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_now]  += full_excitation[..., step+1] # last dimension contains: w prev, w now, w next
+        w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_now]  += full_excitation[:, updateStartH:updateEndH, updateStartW:updateEndW, step+1] # last dimension contains: w prev, w now, w next
        
         # neighbors, in space and/or time
         wn_l = w[:, updateStartH:updateEndH,      updateStartW-1:updateEndW-1, time_slice_now]
