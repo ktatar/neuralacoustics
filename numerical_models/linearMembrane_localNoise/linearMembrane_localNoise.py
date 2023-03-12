@@ -136,10 +136,10 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, d
     
     #--------------------------------------------------------------
     # initial condition
-    excite = torch.zeros(b, h-2, w-2, nsteps)
+    excite = torch.zeros(b, h, w, nsteps)
     
     # initial condition is first excitation
-    excite[..., 0] = noise_submatrix[...]
+    excite[:, 1:-1, 1:-1, 0] = noise_submatrix[...]
 
     #--------------------------------------------------------------
     # run solver
