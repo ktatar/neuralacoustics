@@ -107,8 +107,8 @@ def generate_datasetBatch(dev, dryrun):
 
 
 def generate_randImpulse_tensors(_B):
-    rd_x = torch.randint(0, w-2, (_B,)) 
-    rd_y = torch.randint(0, h-2, (_B,))
+    rd_x = torch.randint(1, w-1, (_B,)) 
+    rd_y = torch.randint(1, h-1, (_B,))
     rd_amp = torch.randn(_B)
     return rd_x, rd_y, rd_amp
 
