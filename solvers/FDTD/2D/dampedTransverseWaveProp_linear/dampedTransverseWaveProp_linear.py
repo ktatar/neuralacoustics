@@ -53,7 +53,7 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
 
   # excitation
   full_excitation = torch.zeros([b, h, w, nsteps+1], device=dev) 
-  full_excitation[:, 1:h-1, 1:w-1, 1:] = excite[...] # copy excitation to tensor on device 
+  full_excitation[..., 1:] = excite[...] # copy excitation to tensor on device 
 
   xi_neigh = torch.zeros([b, h, w, 4], device=dev) # last dimension will contain: xi now of left, right, top and bottom neighbor, respectively
   bound_neigh = torch.zeros([b, h, w, 4, 2], device=dev) # second last dimension will contain: boundaries info [is wall? and gamma] of left, right, top and bottom neighbor, respectively
