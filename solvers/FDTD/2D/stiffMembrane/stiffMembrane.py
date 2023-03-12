@@ -95,12 +95,12 @@ def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp
     # displacement
     w = torch.zeros([b, frameH, frameW, 3], device=dev) # last dimension contains: w prev, w now, w next
     
-    # excitation
-    full_excitation = torch.zeros([b, frameH, frameW, nsteps+1], device=dev) 
-    full_excitation[:, updateStartH:updateEndH, updateStartW:updateEndW, 1:] = excite[...] # copy excitation to tensor on device 
+    # excitation 
+    full_excitation = torch.zeros([b, domainH, domainW, nsteps+1], device=dev) 
+    full_excitation[..., 1:] = excite[...] # copy excitation to tensor on device 
     
-    # solution
-    sol = torch.zeros([b, frameH, frameW, nsteps+1], device=dev) # to save solutions
+    # solution 
+    sol = torch.zeros([b, domainH, domainW, nsteps+1], device=dev) # to save solutions
 
     # current and previous displacements for calulations, only on part of domain that is updated
     wn   = torch.zeros([b, updateFrameH, updateFrameW], device=dev)
@@ -158,7 +158,7 @@ def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp
 
         # add excitation to w:
         # only adding excitation to the initally specified domain
-        w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_now]  += full_excitation[:, updateStartH:updateEndH, updateStartW:updateEndW, step+1] # last dimension contains: w prev, w now, w next
+        w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_now]  += full_excitation[:, 1:-1, 1:-1, step+1] # last dimension contains: w prev, w now, w next
        
         # neighbors, in space and/or time
         wn_l = w[:, updateStartH:updateEndH,      updateStartW-1:updateEndW-1, time_slice_now]
@@ -222,8 +222,7 @@ def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp
                 print(f'Step {step+1} of {nsteps} - Max: {w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_next].max().item()}')
                 plotDomain(w[0,:,:,time_slice_now], pause=pause)
         
-        sol[...,step+1] = w[..., time_slice_next] # save output (future state)
-
+        sol[...,step+1] = w[:, 1:-1, 1:-1, time_slice_next] # save output (future state)
 
         w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_prev] = w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_now]
         w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_now] = w[:, updateStartH:updateEndH, updateStartW:updateEndW, time_slice_next]
@@ -235,6 +234,7 @@ def run(dev, dt, nsteps, b, w, h, sigma0, sigma1, T, nu, E, H, rho, excite, disp
         
 
         #samples[step] = w[0, mic_y, mic_x, time_slice_next]
+    return full_excitation, sol
 
     #samples = samples.unsqueeze(0)
     #current_time = datetime.now()
