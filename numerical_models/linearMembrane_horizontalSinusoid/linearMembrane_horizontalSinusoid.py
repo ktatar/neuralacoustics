@@ -174,8 +174,8 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, e
     # notice that despite the initial condition being normalized to the chosen mag value, the maximum displacement during the time simulation
     # will likely go above that due to constructive interference with reflected waves
     
-    excite = torch.zeros(b, h-2, w-2, nsteps)
-    excite[..., 0] = xi0[...]
+    excite = torch.zeros(b, h, w, nsteps)
+    excite[:, 1:-1, 1:-1, 0] = xi0[...]
     
     #--------------------------------------------------------------
     # run solver
