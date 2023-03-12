@@ -118,7 +118,7 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp, disp=False
     
     #--------------------------------------------------------------
     # initial condition
-    excite = torch.zeros(b, h-2, w-2, nsteps)
+    excite = torch.zeros(b, h, w, nsteps)
     excite[range(b), ex_y[range(b)], ex_x[range(b)], 0] = ex_amp[range(b)]
     # tensor indexing with range() instead of ':' adapted from here: https://stackoverflow.com/questions/61096522/pytorch-tensor-advanced-indexing
 
