@@ -100,6 +100,7 @@ if batch_size>n_test or n_test%batch_size!=0:
 epochs = config['training'].getint('epochs')
 
 learning_rate = config['training'].getfloat('learning_rate')
+scheduler_type = config['training'].get('cosine_annealing')
 scheduler_step = config['training'].getint('scheduler_step')
 scheduler_gamma = config['training'].getfloat('scheduler_gamma')
 
@@ -248,11 +249,12 @@ if normalize:
 assert(S == train_u.shape[-2])
 assert(T_out == train_u.shape[-1])
 
-# TODO: incorporate different input data form
-# train_a = train_a.reshape(n_train,S,S,T_in)
-# test_a = test_a.reshape(n_test,S,S,T_in)
-train_a = train_a.reshape(n_train,S,S,1,T_in).repeat([1,1,1,40,1])
-test_a = test_a.reshape(n_test,S,S,1,T_in).repeat([1,1,1,40,1])
+if inference_type == 'multiple_step':
+    train_a = train_a.reshape(n_train,S,S,1,T_in).repeat([1,1,1,T_out,1])
+    test_a = test_a.reshape(n_test,S,S,1,T_in).repeat([1,1,1,T_out,1])
+else:
+    train_a = train_a.reshape(n_train,S,S,T_in)
+    test_a = test_a.reshape(n_test,S,S,T_in)
 
 num_workers = 1 # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
 
@@ -269,11 +271,9 @@ print(f'\nDataset preprocessing finished, elapsed time: {t2-t1} s')
 print(f'Training input shape: {train_a.shape}, output shape: {train_u.shape}')    
 
 
-
 #-------------------------------------------------------------------------------
 # select device and create model
 print(f'\nModel name: {model_name}')
-
 
 # in case of generic gpu or cuda explicitly, check if available
 if dev == 'gpu' or 'cuda' in dev:
@@ -302,10 +302,15 @@ print('Device:', dev)
 print(f'Number of model\'s parameters: {count_params(model)}')
 optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 # optimizer = SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9) # this would need to be modified to handle complex arithmetic
-# TODO: incorporate different scheduler
-# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
-iterations = epochs * (n_train // batch_size)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=iterations)
+
+scheduler = None
+if scheduler_type == 'cosine_annealing':
+    iterations = epochs * (n_train // batch_size)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=iterations)
+    print(f"Using cosine annealing scheduler")
+else:
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_step, gamma=scheduler_gamma)
+    print(f"Using step scheduler")
 
 # Load previous checkpoint
 prev_ep = 0
@@ -315,6 +320,7 @@ if load_model_name != "":
     optimizer.load_state_dict(state_dict['optimizer_state_dict'])
     scheduler.load_state_dict(state_dict['scheduler_state_dict'])
     prev_ep = state_dict['epoch'] + 1
+
 #-------------------------------------------------------------------------------
 # train!
 
@@ -329,101 +335,92 @@ print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step 
 
 myloss = LpLoss(size_average=False)
 for ep in range(epochs):
-
     #--------------------------------------------------------
     # train
     model.train()
     t1 = default_timer()
     train_l2_step = 0
     train_l2_full = 0
-    # for xx, yy in train_loader:
-    #     loss = 0
-    #     xx = xx.to(dev)
-    #     yy = yy.to(dev)
-
-    #     # model outputs 1 timestep at a time [i.e., labels], so we iterate over T_out steps to compute loss
-    #     for t in range(0, T_out):
-    #         y = yy[..., t:t+1]
-    #         im = model(xx)
-    #         loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
-
-    #         if t == 0:
-    #             pred = im
-    #         else:
-    #             pred = torch.cat((pred, im), -1)
-
-    #         xx = torch.cat((xx[..., 1:], im), dim=-1)
-
-    #     train_l2_step += loss.item()
-    #     l2_full = myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
-    #     train_l2_full += l2_full.item()
-    #     #VIC not sure why not simply train_l2_full += myloss(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
-
-    #     optimizer.zero_grad()
-    #     loss.backward()
-    #     optimizer.step()
-
     for xx, yy in train_loader:
         loss = 0
         xx = xx.to(dev)
         yy = yy.to(dev)
 
-        optimizer.zero_grad()
-        pred = model(xx)
-        pred = pred.view(batch_size, S, S, 40)
+        if inference_type == 'multiple_step':
+            # model outputs T_out timestep at a time
+            optimizer.zero_grad()
 
-        if normalize:
-            pred = y_normalizer.decode(pred)
-            yy = y_normalizer.decode(yy)
+            pred = model(xx).view(batch_size, S, S, T_out)
 
-        l2_full = myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
-        l2_full.backward()
-        optimizer.step()
-        scheduler.step()
+            if normalize:
+                pred = y_normalizer.decode(pred)
+                yy = y_normalizer.decode(yy)
 
-        train_l2_full += l2_full.item()
-        
+            l2_full = myloss(pred.view(batch_size, -1), yy.view(batch_size, -1))
+            l2_full.backward()
+
+            optimizer.step()
+            scheduler.step()
+            train_l2_full += l2_full.item()
+        else:
+            # model outputs 1 timestep at a time [i.e., labels], so we iterate over T_out steps to compute loss
+            for t in range(0, T_out):
+                y = yy[..., t:t+1]
+                im = model(xx)
+                loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
+
+                if t == 0:
+                    pred = im
+                else:
+                    pred = torch.cat((pred, im), -1)
+
+                xx = torch.cat((xx[..., 1:], im), dim=-1)
+
+            train_l2_step += loss.item()
+            l2_full = myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
+            train_l2_full += l2_full.item()
+            #VIC not sure why not simply train_l2_full += myloss(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
 
     #--------------------------------------------------------
     # test
     test_l2_step = 0
     test_l2_full = 0
     model.eval()
-    # with torch.no_grad():
-    #     for xx, yy in test_loader:
-    #         loss = 0
-    #         xx = xx.to(dev)
-    #         yy = yy.to(dev)
-
-    #         for t in range(0, T_out):
-    #             y = yy[..., t:t+1]
-    #             im = model(xx)
-    #             loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
-
-    #             if t == 0:
-    #                 pred = im
-    #             else:
-    #                 pred = torch.cat((pred, im), -1)
-
-    #             xx = torch.cat((xx[..., 1:], im), dim=-1)
-
-    #         test_l2_step += loss.item()
-    #         test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
-    
     with torch.no_grad():
         for xx, yy in test_loader:
             loss = 0
             xx = xx.to(dev)
             yy = yy.to(dev)
 
-            pred = model(xx).view(batch_size, S, S, 40)
-            if normalize:
-                pred = y_normalizer.decode(pred)
-            test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+            if inference_type == 'multiple_step':
+                pred = model(xx).view(batch_size, S, S, T_out)
+                if normalize:
+                    pred = y_normalizer.decode(pred)
 
+                test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+            else:
+                for t in range(0, T_out):
+                    y = yy[..., t:t+1]
+                    im = model(xx)
+                    loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
+
+                    if t == 0:
+                        pred = im
+                    else:
+                        pred = torch.cat((pred, im), -1)
+
+                    xx = torch.cat((xx[..., 1:], im), dim=-1)
+
+                test_l2_step += loss.item()
+                test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+    
     t2 = default_timer()
-    scheduler.step()
-
+    # scheduler.step()
 
     #--------------------------------------------------------
     #log
