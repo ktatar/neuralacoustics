@@ -95,21 +95,24 @@ def load(config_path, ch, prj_root, pause):
 
     return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path
 
+
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
-        ex_x, ex_y, noise_submatrix = generate_fullNoiseMatrix(B) 
-        full_excitation, sol = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix)
+        rd_x, rd_y, rand_size_x, rand_size_y  = generate_fullNoiseParams(B) 
+        full_excitation, sol = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, rd_x, rd_y, rand_size_x, rand_size_y)
     else:
-        ex_x, ex_y, noise_submatrix = generate_fullNoiseMatrix(1) #create rand tensors for excitation and medium
-        full_excitation, sol = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
+        rd_x, rd_y, rand_size_x, rand_size_y = generate_fullNoiseParams(1) #create rand tensors for excitation and medium
+        full_excitation, sol = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, rd_x, rd_y, rand_size_x, rand_size_y, disp=True, dispRate=1/1, pause=pause_sec) #run with B = 1
     return full_excitation, sol
 
 
-def generate_fullNoiseMatrix(_B):
-    _ex_x = torch.zeros(_B) 
-    _ex_y = torch.zeros(_B)
-    _noise_matrix = torch.randn(_B, h-2, w-2)
-    return _ex_x, _ex_y, _noise_matrix
+def generate_fullNoiseParams(_B):
+    rd_x = torch.ones(_B, dtype=torch.long) #always at upper left corner, makes sure we're using
+    rd_y = torch.ones(_B, dtype=torch.long) 
+    rand_size_x = torch.ones(_B, dtype=torch.long) * (w-2) 
+    rand_size_y = torch.ones(_B, dtype=torch.long) * (h-2) 
+    return rd_x, rd_y, rand_size_x, rand_size_y
+
 
 def getSolverInfoFromModel():
     return model.getSolverInfo()
