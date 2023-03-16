@@ -11,6 +11,7 @@ import torch
 
 from pathlib import Path
 from timeit import default_timer
+from sys import platform
 
 # to load model structure
 from networks.FNO2d.FNO2d import FNO2d
@@ -167,7 +168,10 @@ if normalize:
 # test_a = test_a.reshape(n_test, S, S, T_in)
 test_a = test_a.reshape(n_test, S, S, 1, T_in).repeat([1, 1, 1, 40, 1])
 
-num_workers = 1  # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
+if platform == 'darwin':
+    num_workers = 0 
+else:
+    num_workers = 1 # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
 
 # Dataloader
 test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u),

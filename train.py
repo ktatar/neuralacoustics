@@ -4,6 +4,7 @@ import configparser
 from pathlib import Path
 from datetime import datetime # for current date time in name of model
 import socket # for hostname in name of model
+from sys import platform # for checking current operating system
 
 # to load dataset
 from neuralacoustics.DatasetManager import DatasetManager
@@ -256,7 +257,10 @@ else:
     train_a = train_a.reshape(n_train,S,S,T_in)
     test_a = test_a.reshape(n_test,S,S,T_in)
 
-num_workers = 1 # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
+if platform == 'darwin':
+    num_workers = 0 
+else:
+    num_workers = 1 # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
 
 # datapoints will be loaded from these
 train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True, 
