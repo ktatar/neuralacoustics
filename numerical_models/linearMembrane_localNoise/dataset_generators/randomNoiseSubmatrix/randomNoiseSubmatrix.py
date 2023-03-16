@@ -76,8 +76,9 @@ def load(config_path, ch, prj_root, pause):
     # noise submatrix side (using eval to allow the use of w and h), these must be ints.
     init_size_min = int(eval(config['dataset_generator_parameters'].get('init_size_min'))) # minimum side of noise submatrix [cells]
     init_size_max = int(eval(config['dataset_generator_parameters'].get('init_size_max'))) # maximum side of noise submatrix [cells]
+    init_size_min, init_size_max = check_inputs(init_size_min, init_size_max)
 
-    
+
     #------------------------------------------------------------------------------------------------------------------------------------
     # imports + loads model
 
@@ -104,37 +105,62 @@ def load(config_path, ch, prj_root, pause):
 
     return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path
 
+
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
-        ex_x, ex_y, noise_submatrix = generate_randNoiseSubmatrix(B) 
-        full_excitation, sol = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix)
+        rd_x, rd_y, rand_size = generate_randNoiseParams(B) 
+        full_excitation, sol = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, rd_x, rd_y, rand_size, rand_size)
     else:
-        ex_x, ex_y, noise_submatrix = generate_randNoiseSubmatrix(1) #create rand tensors for excitation and medium
-        full_excitation, sol = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, disp =True, dispRate = 1/1, pause = pause_sec) #run with B = 1
+        rd_x, rd_y, rand_size = generate_randNoiseParams(1) #create rand tensors for excitation and medium
+        full_excitation, sol = model.run(dev, 1, dt, nsteps, w, h, mu, rho, gamma, rd_x, rd_y, rand_size, rand_size, disp=True, dispRate=1/1, pause=pause_sec) #run with B = 1
     return full_excitation, sol
 
 
-def generate_randNoiseSubmatrix(_B):
+def generate_randNoiseParams(_B):
     # generate random sizes for the submatrix, min & max sizes both inclusive
-    rand_size = torch.randint(init_size_min, init_size_max + 1, (_B,), dtype=torch.long)
+    rand_size = torch.randint(init_size_min, init_size_max+1, (_B,), dtype=torch.long)
 
     # create random indices for the submatrix
-    rd_y = torch.randint(0, h-2, (B,))  # random indices (across full domain)
-    max_indices_h = h-2-rand_size  # max indices possible for each submatrix size
-    rd_y = torch.remainder(rd_y, max_indices_h + 1)  # take elementwise index_value % (max_index_value+1),
+    rd_y = torch.randint(0, h-2, (B,)) 
+    max_indices_h = h-2-rand_size  # max indices possible for each submatrix size (domain size-2(for the rim)-submatrix size)
+    rd_y = torch.remainder(rd_y, max_indices_h+1)  # take elementwise index_value % (max_index_value+1), keeps indices in range
+    rd_y += 1 # add one to shift indices into center
 
     rd_x = torch.randint(0, w-2, (B,))  # repeat for x-axis
     max_indices_w = w-2-rand_size
-    rd_x = torch.remainder(rd_x, max_indices_w + 1)
+    rd_x = torch.remainder(rd_x, max_indices_w+1)
+    rd_x += 1
 
-    # TODO replace for loop with vectorized approach
-    noise_submatrix = torch.zeros(_B, h - 2, w - 2)
-    for _b in range(_B):
-        noise_submatrix[_b, rd_y[_b]:rd_y[_b] + rand_size[_b], rd_x[_b]:rd_x[_b] + rand_size[_b]] \
-            = torch.randn(rand_size[_b], rand_size[_b])
+    return rd_x, rd_y, rand_size
 
-    return rd_x, rd_y, noise_submatrix
+
+def check_inputs(init_size_min, init_size_max):
+    min_default = 1
+    max_default = min(h, w)-2
+
+    # checking values for init_size min
+    if init_size_min < min_default:
+        init_size_min = min_default
+        print(f"Value for init_size_min is less than {min_default}, will be clipped to {min_default}")
+    elif init_size_min > max_default:
+        init_size_min = max_default
+        print(f"Value for init_size_min is greater than {max_default}, will be clipped to {max_default}")
+
+    # checking values for init_size_max
+    if init_size_max < min_default:
+        init_size_max = min_default
+        print(f"Value for init_size_max is less than {min_default}, will be clipped to {min_default}")
+    elif init_size_max > max_default:
+        init_size_max = max_default
+        print(f"Value for init_size_max is greater than {max_default}, will be clipped to {max_default}")
+
+    # checking that min < max
+    if init_size_min > init_size_max:
+        init_size_min = init_size_max
+        print(f"Value for init_size_min is greater than init_size_max, will be clipped to {init_size_max}")
+
+    return init_size_min, init_size_max
+
 
 def getSolverInfoFromModel():
     return model.getSolverInfo()
-
