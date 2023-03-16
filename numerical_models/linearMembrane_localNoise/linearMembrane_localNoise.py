@@ -116,7 +116,7 @@ def _load(solver_path, prj_root, config_path):
     return
 
 
-def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, disp=False, dispRate=1, pause=0):
+def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, rd_x, rd_y, rand_size_x, rand_size_y, disp=False, dispRate=1, pause=0):
     #function will be called by generator, all params passed at runtime (does not use global variables)
     #The arguments mu, rho, gamma, ex_x, ex_y, ex_amp are all arrays with b elements.
 
@@ -135,11 +135,22 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, d
     _gamma = gamma.view(-1, 1, 1).expand_as(_gamma) * _gamma
     
     #--------------------------------------------------------------
+
+    # TODO replace for loop with vectorized approach
     # initial condition
-    excite = torch.zeros(b, h, w, nsteps)
     
-    # initial condition is first excitation
-    excite[:, 1:-1, 1:-1, 0] = noise_submatrix[...]
+    excite = torch.zeros(b, h, w, nsteps)
+    for _b in range(b):
+        start_y = rd_y[_b]
+        end_y = rd_y[_b]+rand_size_y[_b]
+
+        start_x = rd_x[_b]
+        end_x = rd_x[_b]+rand_size_x[_b]
+        
+        rd_size_y = rand_size_y[_b]
+        rd_size_x = rand_size_x[_b]
+        
+        excite[_b, start_y:end_y, start_x:end_x, 0] = torch.randn(rd_size_y, rd_size_x)
 
     #--------------------------------------------------------------
     # run solver
