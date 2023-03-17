@@ -1,7 +1,7 @@
 import torch
 from pathlib import Path # to properly handle paths and folders on every os
 from neuralacoustics.utils import openConfig
-from neuralacoustics.utils import import_file
+from neuralacoustics.utils import import_fromScript
 
 # to store values from load()
 solver = 0 # where to load solver
@@ -91,7 +91,7 @@ def load_test(config_path, prj_root):
 
 def _load(solver_path, prj_root, config_path):
     global solver
-    solver, temp_var = import_file(prj_root, config_path, solver_path)
+    solver, _ = import_fromScript(prj_root, config_path, solver_path)
 
     return
 
@@ -131,8 +131,8 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, c, tube_x, tube_y, tube_length, tube_
         exciteV[_b, tube_y[_b]:tube_y[_b]+tube_width[_b], tube_x[_b]:tube_x[_b]+excitationW, 0] = ex_mag[_b] # initial condition
     #--------------------------------------------------------------
     # run solver
-    sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, disp=disp, dispRate=dispRate, pause=pause)
-    return [sol, sol_t]
+    full_excitation, sol = solver.run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, disp=disp, dispRate=dispRate, pause=pause)
+    return [full_excitation, sol]
 
 def run_test(dev, dispRate=1, pause=0):
     # set parameters
