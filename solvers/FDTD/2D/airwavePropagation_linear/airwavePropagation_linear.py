@@ -132,8 +132,8 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
     PV_N[:, domainStart:domainEndH, domainStart:domainEndW, pv_n_pos_slice_t] = walls
 
     # excitaiton tensor
-    excitationV = torch.zeros([b, updateFrameH, updateFrameW, nsteps], device=dev)
-    excitationV[:, pmls:pmls+domainH, pmls:pmls+domainW, :] = exciteV
+    excitationV = torch.zeros([b, updateFrameH, updateFrameW, nsteps+1], device=dev)
+    excitationV[:, pmls:pmls+domainH, pmls:pmls+domainW, 1:] = exciteV
 
 
     # To store beta(tube wall) and sigmaPrimedt(PML Layers) for each type of cell 
@@ -259,8 +259,8 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
     excitation_weight[..., dir_slice_y] = is_excitation[..., pos_slice_cntr]*sourceDirection[..., pos_slice_cntr, srcDir_slice_u] + is_excitation[..., pos_slice_top]*-sourceDirection[..., pos_slice_top, srcDir_slice_d]   # either current is vertical excitation or top neighbor is backwards vertical excitation
 
     # if my neighbor is a backwards excitation [i.e., excitation_weight==-1], then copy their excitation here
-    excitationV[:, :, :-1, :] = excitationV[:, :, :-1, :]+excitationV[:, :, 1:, :]*(excitation_weight[:, :, :-1, dir_slice_x]==-1).unsqueeze(3).repeat(1, 1, 1, nsteps)
-    excitationV[:, 1:, :, :] = excitationV[:, 1:, :, :]+excitationV[:, :-1, :, :]*(excitation_weight[:, 1:, :, dir_slice_y]==-1).unsqueeze(3).repeat(1, 1, 1, nsteps)
+    excitationV[:, :, :-1, :] = excitationV[:, :, :-1, :]+excitationV[:, :, 1:, :]*(excitation_weight[:, :, :-1, dir_slice_x]==-1).unsqueeze(3).repeat(1, 1, 1, nsteps+1)
+    excitationV[:, 1:, :, :] = excitationV[:, 1:, :, :]+excitationV[:, :-1, :, :]*(excitation_weight[:, 1:, :, dir_slice_y]==-1).unsqueeze(3).repeat(1, 1, 1, nsteps+1)
 
     # caches whether neighbors are air or not
     is_normal_dir = torch.zeros([b, updateFrameH, updateFrameW, 4], device=dev)
@@ -336,8 +336,8 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
 
         # STEP4: excitation
         # Inject the source to the Vx_next and Vy_next = excitationV(T)
-        vb_ex[..., dir_slice_x] = excitationV[..., step]*excitation_weight[..., dir_slice_x]
-        vb_ex[..., dir_slice_y] = excitationV[..., step]*excitation_weight[..., dir_slice_y]
+        vb_ex[..., dir_slice_x] = excitationV[..., step+1]*excitation_weight[..., dir_slice_x]
+        vb_ex[..., dir_slice_y] = excitationV[..., step+1]*excitation_weight[..., dir_slice_y]
         
         # STEP 5: wall absorption
         # Compute vb_alpha
@@ -373,7 +373,7 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
                
         t += dt
         
-    return sol[:, pmls:-pmls, pmls:-pmls,:], sol_t
+    return excitationV[:, pmls:-pmls, pmls:-pmls,:], sol[:, pmls:-pmls, pmls:-pmls,:]
 
 
 def getInfo():
