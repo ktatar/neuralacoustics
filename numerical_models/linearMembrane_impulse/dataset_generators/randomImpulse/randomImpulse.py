@@ -33,6 +33,7 @@ def load(config_path, ch, prj_root, pause):
     global dryrun 
     global pause_sec
     global model
+    global amp_factor
     
     #open config file
     generator_name = Path(__file__).stem
@@ -61,6 +62,9 @@ def load(config_path, ch, prj_root, pause):
     # dataset size
     N = config['dataset_generator_parameters'].getint('N') # num of dataset points
     B = config['dataset_generator_parameters'].getint('B') # batch size
+    
+    # excitation amplitude factor
+    amp_factor = config['numerical_model_parameters'].getfloat('amp_factor')
     
     # seconds to pause between datapoints during visualization
     pause_sec = pause
@@ -125,7 +129,8 @@ def generate_datasetBatch(dev, dryrun):
 def generate_randImpulse_tensors(_B):
     rd_x = torch.randint(0, w-2, (_B,)) 
     rd_y = torch.randint(0, h-2, (_B,))
-    rd_amp = torch.randn(_B)
+    # rd_amp = torch.randn(_B)
+    rd_amp = torch.rand(_B) * amp_factor # generate from uniform distribution
     return rd_x, rd_y, rd_amp
 
 def getSolverInfoFromModel():
