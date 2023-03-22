@@ -101,7 +101,7 @@ if batch_size>n_test or n_test%batch_size!=0:
 epochs = config['training'].getint('epochs')
 
 learning_rate = config['training'].getfloat('learning_rate')
-scheduler_type = config['training'].get('cosine_annealing')
+scheduler_type = config['training'].get('scheduler')
 scheduler_step = config['training'].getint('scheduler_step')
 scheduler_gamma = config['training'].getfloat('scheduler_gamma')
 
