@@ -534,10 +534,13 @@ for(each_key, each_val) in config.items('training'):
 # Add network detail
 config_model.add_section('network_params_details')
 config_model.add_section('network_parameters')
+config_model.add_section('network_details')
 for (k, v) in network_config.items('network_params_details'):
     config_model.set('network_params_details', k, v)
 for (k, v) in network_config.items('network_parameters'):
     config_model.set('network_parameters', k, v)
+for (k, v) in network_config.items('network_details'):
+    config_model.set('network_details', k, v)
 
 config_model.set('network_parameters', 'T_in', T_in)
 

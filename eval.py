@@ -78,6 +78,10 @@ network_path = network_dir / (network_name + '.py')
 
 network_config_path = model_ini_path
 
+# Read network inferrence type
+network_config = openConfig(network_config_path, __file__)
+inference_type = network_config['network_details'].get('inference_type')
+
 # Load network
 network_path_folders = network_path.parts
 network_path_struct = '.'.join(network_path_folders)[:-3]
@@ -125,7 +129,7 @@ else:
 
 
 #---------------------------------------------------------------------
-# load entry from dataset [test set]
+# Load entry from dataset [test set]
 
 dataset_manager = DatasetManager(dataset_name, dataset_dir, False)
 u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry, offset=offset)
@@ -154,6 +158,7 @@ if plot_waveform:
 # Prepare test set
 n_test = timesteps
 test_a = u[-n_test:, :, :, :T_in]
+# test_a = u[0:1, :, :, :T_in]
 test_u = u[-n_test:, :, :, T_in:T_in+T_out]
 
 #print(train_u.shape, test_u.shape)
@@ -165,8 +170,10 @@ if normalize:
     print("Normalizing input data...")
     test_a = a_normalizer.encode(test_a)
 
-# test_a = test_a.reshape(n_test, S, S, T_in)
-test_a = test_a.reshape(n_test, S, S, 1, T_in).repeat([1, 1, 1, 40, 1])
+if inference_type == 'multiple_step':
+    test_a = test_a.reshape(n_test, S, S, 1, T_in).repeat([1, 1, 1, T_out, 1])  
+else:
+    test_a = test_a.reshape(n_test, S, S, T_in)
 
 if platform == 'darwin':
     num_workers = 0 
@@ -196,12 +203,76 @@ print(f'\trandom seed: {seed}\n')
 
 
 #---------------------------------------------------------------------
-# model evaluation
+# Start evaluation
+
+# if normalize:
+#     if dev == torch.device('cuda'):
+#         y_normalizer.cuda()
+#     else:
+#         y_normalizer.cpu()
 
 model.eval()
+with torch.no_grad():
+    for i, (features, label) in enumerate(test_loader):
+        features = features.to(dev)
+        label = label.to(dev)
+
+        t1 = default_timer()
+        prediction = model(features)
+        t2 = default_timer()
+        print(f'Timestep {i} of {timesteps}, inference computation time: {t2 - t1}s')
+        
+        if inference_type == 'multiple_step':
+            prediction = prediction.view(1, S, S, T_out)
+            if plot_waveform:
+                pred_waveform
+
+            if normalize:
+                prediction = y_normalizer.decode(prediction)
+
+            for i in range(T_out):
+                domains = torch.stack([prediction[0, :, :, i], label[0, :, :, i], prediction[0, :, :, i] - label[0, :, :, i]])
+                titles = ['Prediction', 'Ground Truth', 'Difference']
+                plot3Domains(domains, pause=pause_sec,
+                            figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+        else:
+            if plot_waveform:
+                pred_waveform[i] = prediction[0, mic_x, mic_y, 0]
+                label_waveform[i] = label[0, mic_x, mic_y, 0]
+
+            domains = torch.stack([prediction, label, prediction - label]) # prediction shape: [1, 64, 64, 1]
+            titles = ['Prediction', 'Ground Truth', 'Difference']
+            plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
+                        figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+
+            # auto-regressive
+            features = torch.cat((features, prediction), -1)
+
+    # Plot waveform
+    if plot_waveform:
+        plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
+                    'Prediction', 'Ground Truth'])
+    
+    # Count operation number using the input
+    if opcount:
+        a_opcount = a_opcount.to(dev)
+        # pytorch-OpCounter
+        # flops, params = profile(model=model, inputs=(a_opcount,))
+        # print(f'Operation count:')
+        # print(f'\tflops: {flops}, params: {params}')
+
+        # flops-counter
+        # macs, params = get_model_complexity_info(model, (256, 256, 10), as_strings=True, print_per_layer_stat=True, verbose=True)
+        # print(f"Complexity: {macs}")
+        # print(f"Parameters: {params}")
+
+        # fvcore
+        flops_alt = FlopCountAnalysis(model, a_opcount)
+        print(f'Operation count:')
+        print(flop_count_table(flops_alt))
+        # print(flops_alt.by_module_and_operator())
 
 
-# Start evaluation
 # with torch.no_grad():
 #     for i, (features, label) in enumerate(test_loader):
 #         features = features.to(dev)
@@ -212,64 +283,13 @@ model.eval()
 #         t2 = default_timer()
 #         print(f'Timestep {i} of {timesteps}, inference computation time: {t2 - t1}s')
 
-#         if plot_waveform:
-#             pred_waveform[i] = prediction[0, mic_x, mic_y, 0]
-#             label_waveform[i] = label[0, mic_x, mic_y, 0]
+#         prediction = prediction.view(1, S, S, 40)
 
-#         domains = torch.stack([prediction, label, prediction - label]) # prediction shape: [1, 64, 64, 1]
-#         titles = ['Prediction', 'Ground Truth', 'Difference']
-#         plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
-#                     figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+#         if normalize:
+#             prediction = y_normalizer.decode(prediction)
 
-#         # auto-regressive
-#         features = torch.cat((features, prediction), -1)
-
-#     # Plot waveform
-#     if plot_waveform:
-#         plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
-#                     'Prediction', 'Ground Truth'])
-    
-#     # Count operation number using the input
-#     if opcount:
-#         a_opcount = a_opcount.to(dev)
-#         # pytorch-OpCounter
-#         # flops, params = profile(model=model, inputs=(a_opcount,))
-#         # print(f'Operation count:')
-#         # print(f'\tflops: {flops}, params: {params}')
-
-#         # flops-counter
-#         # macs, params = get_model_complexity_info(model, (256, 256, 10), as_strings=True, print_per_layer_stat=True, verbose=True)
-#         # print(f"Complexity: {macs}")
-#         # print(f"Parameters: {params}")
-
-#         # fvcore
-#         flops_alt = FlopCountAnalysis(model, a_opcount)
-#         print(f'Operation count:')
-#         print(flop_count_table(flops_alt))
-#         # print(flops_alt.by_module_and_operator())
-
-if normalize:
-    if dev == torch.device('cuda'):
-        y_normalizer.cuda()
-    else:
-        y_normalizer.cpu()
-with torch.no_grad():
-    for i, (features, label) in enumerate(test_loader):
-        features = features.to(dev)
-        label = label.to(dev)
-
-        t1 = default_timer()
-        prediction = model(features)
-        t2 = default_timer()
-        print(f'Timestep {i} of {timesteps}, inference computation time: {t2 - t1}s')
-
-        prediction = prediction.view(1, S, S, 40)
-
-        if normalize:
-            prediction = y_normalizer.decode(prediction)
-
-        for i in range(40):
-            domains = torch.stack([prediction[0, :, :, i], label[0, :, :, i], prediction[0, :, :, i] - label[0, :, :, i]])
-            titles = ['Prediction', 'Ground Truth', 'Difference']
-            plot3Domains(domains, pause=pause_sec,
-                        figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+#         for i in range(40):
+#             domains = torch.stack([prediction[0, :, :, i], label[0, :, :, i], prediction[0, :, :, i] - label[0, :, :, i]])
+#             titles = ['Prediction', 'Ground Truth', 'Difference']
+#             plot3Domains(domains, pause=pause_sec,
+#                         figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
