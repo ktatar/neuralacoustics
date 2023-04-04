@@ -4,7 +4,9 @@ This script does the following:
 1. Load consecutive data points from a single data entry
 2. Load specified model and checkpoint for evaluation
 3. Visualize full domain output of model prediction, ground truth label, and their differences.
-4. If timesteps > 2 and valid microphone position is provided, visualize predicted and label waveform picked up by mic
+4. If iterations > 2 and valid microphone position is provided, 
+   visualize predicted and ground truth waveform picked up by mic,
+   and write the recorded audio as pred.wav
 """
 
 import torch
@@ -12,6 +14,10 @@ import torch
 from pathlib import Path
 from timeit import default_timer
 from sys import platform
+
+import math
+from scipy.io.wavfile import write
+import numpy as np
 
 # to load model structure
 from networks.FNO2d.FNO2d import FNO2d
@@ -40,7 +46,7 @@ dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
 # Evaluation setting
 entry = config['evaluation'].getint('entry')
 offset = config['evaluation'].getint('offset')
-timesteps = config['evaluation'].getint('timesteps')
+iterations = config['evaluation'].getint('iterations')
 pause_sec = config['evaluation'].getfloat('pause_sec')
 
 mic_x = config['evaluation'].getint('mic_x')
@@ -131,39 +137,51 @@ else:
 #---------------------------------------------------------------------
 # Load entry from dataset [test set]
 
+data_t_out = None
+if inference_type == 'multiple_step':
+    data_t_out = T_out
+else:
+    data_t_out = 1
+
 dataset_manager = DatasetManager(dataset_name, dataset_dir, False)
-u = dataset_manager.loadDataEntry(n=timesteps, win=T_in+T_out, entry=entry, offset=offset)
+u = dataset_manager.loadDataEntry(n=iterations, 
+                                  win=T_in+data_t_out, 
+                                  entry=entry, 
+                                  stride=data_t_out, 
+                                  offset=offset)
 
 if opcount:
-    u_opcount = dataset_manager.loadDataEntry(n=1, win=T_in+T_out, entry=0)
+    u_opcount = dataset_manager.loadDataEntry(n=1, win=T_in+data_t_out, entry=0)
     a_opcount = u_opcount[:, :, :, :T_in]
 
 # Get domain size
 u_shape = list(u.shape)
 S = u_shape[1]
-timesteps = u_shape[0] # reload timestep
+iterations = u_shape[0] # reload iterations
+
 # Assume that all datasets have simulations spanning square domains
 assert(S == u_shape[2])
 
-# Set plot_waveform flag to true if mic position is valid and timesteps >= 2
+# Prepare test set
+n_test = iterations
+test_a = u[0:1, :, :, :T_in] # auto-regressive, hence only need 1 initial input is needed
+test_u = u[-n_test:, :, :, T_in:T_in+data_t_out]
+
+#print(train_u.shape, test_u.shape)
+assert(S == test_u.shape[-2])
+assert(data_t_out == test_u.shape[-1])
+
+# Set plot_waveform flag to true if mic position is valid and iterations >= 2
 plot_waveform = mic_x >= 0 and mic_y >= 0 and u_shape[0] >= 2
 if plot_waveform:
     # Check validity of mic_x and mic_y
     if mic_x >= S or mic_y >= S:
         raise AssertionError("mic_x/mic_y out of bound")
 
-    pred_waveform = torch.zeros(timesteps)
-    label_waveform = torch.zeros(timesteps)
-
-# Prepare test set
-n_test = timesteps
-test_a = u[-n_test:, :, :, :T_in]
-# test_a = u[0:1, :, :, :T_in]
-test_u = u[-n_test:, :, :, T_in:T_in+T_out]
-
-#print(train_u.shape, test_u.shape)
-assert(S == test_u.shape[-2])
-assert(T_out == test_u.shape[-1])
+    pred_waveform = torch.zeros(iterations * data_t_out + T_in)
+    label_waveform = torch.zeros(iterations * data_t_out + T_in)
+    pred_waveform[:T_in] = test_a[0, mic_x, mic_y, :T_in]
+    label_waveform[:T_in] = test_a[0, mic_x, mic_y, :T_in]
 
 # Normalize input data 
 if normalize:
@@ -171,91 +189,114 @@ if normalize:
     test_a = a_normalizer.encode(test_a)
 
 if inference_type == 'multiple_step':
-    test_a = test_a.reshape(n_test, S, S, 1, T_in).repeat([1, 1, 1, T_out, 1])  
+    test_a = test_a.reshape(1, S, S, 1, T_in).repeat([1, 1, 1, data_t_out, 1])  
 else:
-    test_a = test_a.reshape(n_test, S, S, T_in)
+    test_a = test_a.reshape(1, S, S, T_in)
 
 if platform == 'darwin':
     num_workers = 0 
 else:
     num_workers = 1 # for now single-process data loading, called explicitly to assure determinism in future multi-process calls
 
-# Dataloader
-test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u),
-                                          batch_size=1,
-                                          shuffle=False,
-                                          num_workers=num_workers,
-                                          worker_init_fn=seed_worker,
-                                          generator=g)
-#print(f'Test input shape: {test_a.shape}, output shape: {test_u.shape}')
-
-
-
+print(f'Test input shape: {test_a.shape}, output shape: {test_u.shape}')
 
 print('Evaluation parameters:')
 print(f'\tdataset name: {dataset_name}')
 print(f'\trequested entry: {entry}')
-print(f'\trequested timesteps: {timesteps}')
+print(f'\trequested iterations: {iterations}')
+print(f'\ttotal timesteps: {iterations * data_t_out + T_in}')
 print(f'\tmic_x: {mic_x}')
 print(f'\tmic_y: {mic_y}')
 print(f'\trandom seed: {seed}\n')
 
-
-
 #---------------------------------------------------------------------
 # Start evaluation
 
-# if normalize:
-#     if dev == torch.device('cuda'):
-#         y_normalizer.cuda()
-#     else:
-#         y_normalizer.cpu()
+if normalize:
+    if dev == torch.device('cuda'):
+        y_normalizer.cuda()
+    else:
+        y_normalizer.cpu()
 
 model.eval()
 with torch.no_grad():
-    for i, (features, label) in enumerate(test_loader):
-        features = features.to(dev)
-        label = label.to(dev)
+    for i in range(iterations):
+        if i == 0:
+            features = test_a.to(dev)
+            print(features.shape)
+        
+        label = test_u[i:i+1, ...].to(dev)
 
         t1 = default_timer()
         prediction = model(features)
         t2 = default_timer()
-        print(f'Timestep {i} of {timesteps}, inference computation time: {t2 - t1}s')
+        print(f'Iteration {i + 1} of {iterations}, inference computation time: {t2 - t1}s')
         
         if inference_type == 'multiple_step':
-            prediction = prediction.view(1, S, S, T_out)
+            prediction = prediction.view(1, S, S, data_t_out)
+            
             if plot_waveform:
-                pred_waveform
+                pred_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out] = prediction[0, mic_x, mic_y, :]
+                label_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out]= label[0, mic_x, mic_y, :]
 
             if normalize:
                 prediction = y_normalizer.decode(prediction)
 
-            for i in range(T_out):
-                domains = torch.stack([prediction[0, :, :, i], label[0, :, :, i], prediction[0, :, :, i] - label[0, :, :, i]])
-                titles = ['Prediction', 'Ground Truth', 'Difference']
-                plot3Domains(domains, pause=pause_sec,
-                            figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+            # Only plot domain with small iteration number
+            if iterations <= 5:
+                for k in range(data_t_out):
+                    domains = torch.stack([prediction[0, :, :, k], 
+                                           label[0, :, :, k], 
+                                           prediction[0, :, :, k] - label[0, :, :, k]])
+                    titles = ['Prediction', 'Ground Truth', 'Difference']
+                    plot3Domains(domains, pause=pause_sec,
+                                 figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+            
+            # Auto-regressive    
+            features = prediction[:, :, :, -T_in:].reshape(1, S, S, 1, T_in).repeat([1, 1, 1, data_t_out, 1])  
+            
         else:
             if plot_waveform:
-                pred_waveform[i] = prediction[0, mic_x, mic_y, 0]
-                label_waveform[i] = label[0, mic_x, mic_y, 0]
+                pred_waveform[T_in + i] = prediction[0, mic_x, mic_y, 0]
+                label_waveform[T_in + i] = label[0, mic_x, mic_y, 0]
 
-            domains = torch.stack([prediction, label, prediction - label]) # prediction shape: [1, 64, 64, 1]
-            titles = ['Prediction', 'Ground Truth', 'Difference']
-            plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
-                        figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+            # pred_squared = torch.square(prediction)
+            # pred_energy = torch.sum(pred_squared)
+            
+            # label_squared = torch.square(label)
+            # label_energy = torch.sum(label_squared)
+            
+            # print(f"Prediction energy: {pred_energy}\tlabel energy: {label_energy}")
+            
+            # Only plot domain with small iteration number
+            if iterations <= 200:
+                domains = torch.stack([prediction, label, prediction - label]) # prediction shape: [1, 64, 64, 1]
+                titles = ['Prediction', 'Ground Truth', 'Difference']
+                plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
+                            figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
 
-            # auto-regressive
-            features = torch.cat((features, prediction), -1)
+            # Auto-regressive
+            features = torch.cat((features[..., 1:], prediction), -1)
 
     # Plot waveform
     if plot_waveform:
         plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
                     'Prediction', 'Ground Truth'])
+        sample_arr_pred = pred_waveform.cpu().detach().numpy()
+        sample_arr_label = label_waveform.cpu().detach().numpy()
+        write('pred.wav', 44100, sample_arr_pred)
+        write('label.wav', 44100, sample_arr_label)
     
     # Count operation number using the input
     if opcount:
         a_opcount = a_opcount.to(dev)
+        
+        # fvcore
+        flops_alt = FlopCountAnalysis(model, a_opcount)
+        print(f'Operation count:')
+        print(flop_count_table(flops_alt))
+        # print(flops_alt.by_module_and_operator())
+        
         # pytorch-OpCounter
         # flops, params = profile(model=model, inputs=(a_opcount,))
         # print(f'Operation count:')
@@ -265,12 +306,6 @@ with torch.no_grad():
         # macs, params = get_model_complexity_info(model, (256, 256, 10), as_strings=True, print_per_layer_stat=True, verbose=True)
         # print(f"Complexity: {macs}")
         # print(f"Parameters: {params}")
-
-        # fvcore
-        flops_alt = FlopCountAnalysis(model, a_opcount)
-        print(f'Operation count:')
-        print(flop_count_table(flops_alt))
-        # print(flops_alt.by_module_and_operator())
 
 
 # with torch.no_grad():

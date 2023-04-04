@@ -130,7 +130,7 @@ class DatasetManager:
 
         return u
 
-    def loadDataEntry(self, n, win, entry, offset=0):
+    def loadDataEntry(self, n, win, entry, stride=1, offset=0):
         """Load data from one single data entry."""
         # Check validity of entry index
         if entry >= self.ch * self.ch_size + self.rem_size or entry < 0:
@@ -142,10 +142,10 @@ class DatasetManager:
 
         # Set n as the maximum timesteps if specified as -1
         if n == -1:
-            n = self.T + 1 - win
+            n = ((self.T - offset - win) // stride) + 1
 
         # Check whether request is out of bount
-        if offset + n + win > self.T + 1:
+        if offset + (n - 1) * stride + win > self.T:
             raise AssertionError("Requested windows go beyond data entry bound")
 
         # Prepare tensor where to load requested data points
@@ -160,7 +160,7 @@ class DatasetManager:
         dataloader = MatReader(self.files[file_index])
         uu = dataloader.read_field('u')
         for tt in range(n):
-            u[cnt, ...] = uu[entry_in_file, :, :, offset+tt:offset+tt+win]
+            u[cnt, ...] = uu[entry_in_file, :, :, offset+tt*stride:offset+tt*stride+win]
             cnt += 1
 
         return u
