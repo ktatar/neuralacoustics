@@ -8,7 +8,7 @@ from sys import platform # for checking current operating system
 
 # to load dataset
 from neuralacoustics.DatasetManager import DatasetManager
-from neuralacoustics.utils import LpLoss
+from neuralacoustics.utils import LpLoss, LpLossTimeDelta
 from neuralacoustics.utils import seed_worker # for PyTorch DataLoader determinism
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
@@ -337,7 +337,8 @@ log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss
 f.write(log_str)
 print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test')
 
-myloss = LpLoss(size_average=False)
+myloss = LpLossTimeDelta(size_average=False)
+myloss_full = LpLoss(size_average=False)
 for ep in range(epochs):
     #--------------------------------------------------------
     # train
@@ -350,7 +351,7 @@ for ep in range(epochs):
         xx = xx.to(dev)
         yy = yy.to(dev)
 
-        if inference_type == 'multiple_step':
+        if inference_type == 'multiple_step': # TODO: add time derivative loss for FNO3D
             # model outputs T_out timestep at a time
             optimizer.zero_grad()
 
@@ -371,17 +372,30 @@ for ep in range(epochs):
             for t in range(0, T_out):
                 y = yy[..., t:t+1]
                 im = model(xx)
-                loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
-
+                # loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
+                
                 if t == 0:
+                    # xx is ground truth input of steps: [0, T_in - 1]
+                    loss += myloss(im.reshape(batch_size, -1),
+                                   xx[..., -1:].reshape(batch_size, -1),
+                                   y.reshape(batch_size, -1),
+                                   xx[..., -1:].reshape(batch_size, -1))
+
                     pred = im
                 else:
+                    # xx contains previously predicted steps: [t, T_in - 1 + t], 
+                    # yy is ground truth outputs: [T_in, T_in + T_out - 1]
+                    loss += myloss(im.reshape(batch_size, -1),
+                                   xx[..., -1:].reshape(batch_size, -1),
+                                   y.reshape(batch_size, -1),
+                                   yy[..., t-1:t].reshape(batch_size, -1))
+                    
                     pred = torch.cat((pred, im), -1)
 
                 xx = torch.cat((xx[..., 1:], im), dim=-1)
 
             train_l2_step += loss.item()
-            l2_full = myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
+            l2_full = myloss_full(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
             train_l2_full += l2_full.item()
             #VIC not sure why not simply train_l2_full += myloss(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
 
@@ -411,17 +425,26 @@ for ep in range(epochs):
                 for t in range(0, T_out):
                     y = yy[..., t:t+1]
                     im = model(xx)
-                    loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
+                    # loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
                     if t == 0:
+                        loss += myloss(im.reshape(batch_size, -1),
+                                       xx[..., -1:].reshape(batch_size, -1),
+                                       y.reshape(batch_size, -1),
+                                       xx[..., -1:].reshape(batch_size, -1))
                         pred = im
                     else:
+                        loss += myloss(im.reshape(batch_size, -1),
+                                       xx[..., -1:].reshape(batch_size, -1),
+                                       y.reshape(batch_size, -1),
+                                       yy[..., t-1:t].reshape(batch_size, -1))
+                        
                         pred = torch.cat((pred, im), -1)
 
                     xx = torch.cat((xx[..., 1:], im), dim=-1)
 
                 test_l2_step += loss.item()
-                test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+                test_l2_full += myloss_full(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
     
     t2 = default_timer()
     # scheduler.step()

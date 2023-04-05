@@ -299,6 +299,51 @@ class LpLoss(object):
     def __call__(self, x, y):
         return self.rel(x, y)
 
+
+#loss function with rel Lp loss and time derivatives
+class LpLossTimeDelta(object):
+    def __init__(self, d=2, p=2, size_average=True, reduction=True):
+        super(LpLossTimeDelta, self).__init__()
+
+        #Dimension and Lp-norm type are postive
+        assert d > 0 and p > 0
+
+        self.d = d
+        self.p = p
+        self.reduction = reduction
+        self.size_average = size_average
+
+    def rel(self, x, x_prev, y, y_prev, sr=44100., dt_weight=.5):
+        diff_norms = torch.norm(x - y, self.p, 1)
+        y_norms = torch.norm(y, self.p, 1)
+       
+        rel_loss = diff_norms / y_norms
+        
+        dt = 1 / sr
+        x_dt = (x - x_prev) / dt
+        y_dt = (y - y_prev) / dt
+        
+        
+        dt_diff_norms = torch.norm(x_dt - y_dt, self.p, 1)
+        y_dt_norms = torch.norm(y_dt, self.p, 1)
+        
+        rel_loss_dt = dt_diff_norms / y_dt_norms
+        
+        rel_loss_sum = (1 - dt_weight) * rel_loss + dt_weight * rel_loss_dt
+        
+        if self.reduction:
+            if self.size_average:
+                return torch.mean(rel_loss_sum)
+            else:
+                return torch.sum(rel_loss_sum)
+
+        return rel_loss_sum
+
+    def __call__(self, x, x_prev, y, y_prev):
+        return self.rel(x, x_prev, y, y_prev)
+
+
+
 # Sobolev norm (HS norm)
 # where we also compare the numerical derivatives between the output and target
 class HsLoss(object):
