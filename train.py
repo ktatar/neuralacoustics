@@ -8,7 +8,7 @@ from sys import platform # for checking current operating system
 
 # to load dataset
 from neuralacoustics.DatasetManager import DatasetManager
-from neuralacoustics.utils import LpLoss, LpLossTimeDelta
+from neuralacoustics.utils import LpLoss, LpLossDelta
 from neuralacoustics.utils import seed_worker # for PyTorch DataLoader determinism
 from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
@@ -337,7 +337,7 @@ log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss
 f.write(log_str)
 print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test')
 
-myloss = LpLossTimeDelta(size_average=False)
+myloss = LpLossDelta(size_average=False)
 myloss_full = LpLoss(size_average=False)
 for ep in range(epochs):
     #--------------------------------------------------------
@@ -376,19 +376,13 @@ for ep in range(epochs):
                 
                 if t == 0:
                     # xx is ground truth input of steps: [0, T_in - 1]
-                    loss += myloss(im.reshape(batch_size, -1),
-                                   xx[..., -1:].reshape(batch_size, -1),
-                                   y.reshape(batch_size, -1),
-                                   xx[..., -1:].reshape(batch_size, -1))
+                    loss += myloss(im, xx[..., -1:], y, xx[..., -1:])
 
                     pred = im
                 else:
                     # xx contains previously predicted steps: [t, T_in - 1 + t], 
                     # yy is ground truth outputs: [T_in, T_in + T_out - 1]
-                    loss += myloss(im.reshape(batch_size, -1),
-                                   xx[..., -1:].reshape(batch_size, -1),
-                                   y.reshape(batch_size, -1),
-                                   yy[..., t-1:t].reshape(batch_size, -1))
+                    loss += myloss(im, xx[..., -1:], y, yy[..., t-1:t])
                     
                     pred = torch.cat((pred, im), -1)
 
@@ -428,16 +422,10 @@ for ep in range(epochs):
                     # loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
                     if t == 0:
-                        loss += myloss(im.reshape(batch_size, -1),
-                                       xx[..., -1:].reshape(batch_size, -1),
-                                       y.reshape(batch_size, -1),
-                                       xx[..., -1:].reshape(batch_size, -1))
+                        loss += myloss(im, xx[..., -1:], y, xx[..., -1:])
                         pred = im
                     else:
-                        loss += myloss(im.reshape(batch_size, -1),
-                                       xx[..., -1:].reshape(batch_size, -1),
-                                       y.reshape(batch_size, -1),
-                                       yy[..., t-1:t].reshape(batch_size, -1))
+                        loss += myloss(im, xx[..., -1:], y, yy[..., t-1:t])
                         
                         pred = torch.cat((pred, im), -1)
 

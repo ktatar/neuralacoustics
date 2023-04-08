@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import operator
 from functools import reduce
+import math
 
 
 
@@ -301,9 +302,9 @@ class LpLoss(object):
 
 
 #loss function with rel Lp loss and time derivatives
-class LpLossTimeDelta(object):
+class LpLossDelta(object):
     def __init__(self, d=2, p=2, size_average=True, reduction=True):
-        super(LpLossTimeDelta, self).__init__()
+        super(LpLossDelta, self).__init__()
 
         #Dimension and Lp-norm type are postive
         assert d > 0 and p > 0
@@ -313,19 +314,26 @@ class LpLossTimeDelta(object):
         self.reduction = reduction
         self.size_average = size_average
 
-    def rel(self, x, x_prev, y, y_prev, sr=44100., dt_weight=.5):
-        diff_norms = torch.norm(x - y, self.p, 1)
-        y_norms = torch.norm(y, self.p, 1)
-       
+    def rel_dt(self, x, x_prev, y, y_prev, sr=44100., dt_weight=.5):
+        diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), 
+                                self.p, 
+                                1)
+        y_norms = torch.norm(y.reshape(y.shape[0], -1), 
+                             self.p, 
+                             1)
+
         rel_loss = diff_norms / y_norms
         
         dt = 1 / sr
         x_dt = (x - x_prev) / dt
         y_dt = (y - y_prev) / dt
         
-        
-        dt_diff_norms = torch.norm(x_dt - y_dt, self.p, 1)
-        y_dt_norms = torch.norm(y_dt, self.p, 1)
+        dt_diff_norms = torch.norm(x_dt.reshape(x.shape[0], -1) - y_dt.reshape(y.shape[0], -1), 
+                                   self.p, 
+                                   1)
+        y_dt_norms = torch.norm(y_dt.reshape(y.shape[0], -1), 
+                                self.p, 
+                                1)
         
         rel_loss_dt = dt_diff_norms / y_dt_norms
         
@@ -339,8 +347,199 @@ class LpLossTimeDelta(object):
 
         return rel_loss_sum
 
+    def rel_ds(self, x, y, ds=.01, ds_weight=.5):
+        diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), 
+                                self.p, 
+                                1)
+        y_norms = torch.norm(y.reshape(y.shape[0], -1), 
+                             self.p, 
+                             1)
+       
+        rel_loss = diff_norms / y_norms
+        
+        rows = x.shape[1]
+        cols = x.shape[2]
+        
+        # Compute spatial derivatives of x
+        x_pad = torch.zeros((x.shape[0], rows + 4, cols + 4, x.shape[3]))
+        x_pad[:, 2:2+rows, 2:2+cols, :] = x[...]
+        
+        bh_x = torch.zeros(x.shape)
+        for r in range(rows):
+            for c in range(cols):
+                r_pad = r + 2
+                c_pad = c + 2
+                wn = x_pad[:, r_pad, c_pad, :]
+                wn_uu = x_pad[:, r_pad-2, c_pad, :]
+                wn_u = x_pad[:, r_pad-1, c_pad, :]
+                wn_dd = x_pad[:, r_pad+2, c_pad, :]
+                wn_d = x_pad[:, r_pad+1, c_pad, :]
+                wn_ll = x_pad[:, r_pad, c_pad-2, :]
+                wn_l = x_pad[:, r_pad, c_pad-2, :]
+                wn_rr = x_pad[:, r_pad, c_pad+2, :]
+                wn_r = x_pad[:, r_pad, c_pad+1, :]
+                wn_lu = x_pad[:, r_pad-1, c_pad-1, :]
+                wn_ld = x_pad[:, r_pad+1, c_pad-1, :]
+                wn_ru = x_pad[:, r_pad-1, c_pad+1, :]
+                wn_rd = x_pad[:, r_pad+1, c_pad+1, :]
+                
+                bh_x[:, r, c, :] = (20 * wn +\
+                             wn_ll - 8 * wn_l - 8 * wn_r + wn_rr +\
+                             wn_uu - 8 * wn_u - 8 * wn_d + wn_dd +\
+                             2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
+        
+        # Compute spatial derivatives of y
+        y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3]))
+        y_pad[:, 2:2+rows, 2:2+cols, :] = y[...]
+        
+        bh_y = torch.zeros(y.shape)
+        for r in range(rows):
+            for c in range(cols):
+                r_pad = r + 2
+                c_pad = c + 2
+                wn = x_pad[:, r_pad, c_pad, :]
+                wn_uu = x_pad[:, r_pad-2, c_pad, :]
+                wn_u = x_pad[:, r_pad-1, c_pad, :]
+                wn_dd = x_pad[:, r_pad+2, c_pad, :]
+                wn_d = x_pad[:, r_pad+1, c_pad, :]
+                wn_ll = x_pad[:, r_pad, c_pad-2, :]
+                wn_l = x_pad[:, r_pad, c_pad-2, :]
+                wn_rr = x_pad[:, r_pad, c_pad+2, :]
+                wn_r = x_pad[:, r_pad, c_pad+1, :]
+                wn_lu = x_pad[:, r_pad-1, c_pad-1, :]
+                wn_ld = x_pad[:, r_pad+1, c_pad-1, :]
+                wn_ru = x_pad[:, r_pad-1, c_pad+1, :]
+                wn_rd = x_pad[:, r_pad+1, c_pad+1, :]
+                
+                bh_y[:, r, c, :] = (20 * wn +\
+                             wn_ll - 8 * wn_l - 8 * wn_r + wn_rr +\
+                             wn_uu - 8 * wn_u - 8 * wn_d + wn_dd +\
+                             2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
+        
+        ds_diff_norms = torch.norm(bh_x.reshape(x.shape[0], -1) - bh_y.reshape(y.shape[0], -1), 
+                                   self.p, 
+                                   1)
+        ds_y_norms = torch.norm(bh_y.reshape(y.shape[0], -1), 
+                                self.p, 
+                                1)
+        
+        rel_loss_ds = ds_diff_norms / ds_y_norms
+        
+        rel_loss_sum = (1 - ds_weight) * rel_loss + ds_weight * rel_loss_ds
+        
+        if self.reduction:
+            if self.size_average:
+                return torch.mean(rel_loss_sum)
+            else:
+                return torch.sum(rel_loss_sum)
+
+        return rel_loss_sum
+    
+    def rel_dtds(self, x, x_prev, y, y_prev, ds=.01, sr=44100., dt_weight=.4, ds_weight=.3):
+        diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), 
+                                self.p, 
+                                1)
+        y_norms = torch.norm(y.reshape(y.shape[0], -1), 
+                             self.p, 
+                             1)
+       
+        rel_loss = diff_norms / y_norms
+        
+        rows = x.shape[1]
+        cols = x.shape[2]
+        
+        # Compute spatial derivatives of x
+        x_pad = torch.zeros((x.shape[0], rows + 4, cols + 4, x.shape[3]))
+        x_pad[:, 2:2+rows, 2:2+cols, :] = x[...]
+        
+        bh_x = torch.zeros(x.shape)
+        for r in range(rows):
+            for c in range(cols):
+                r_pad = r + 2
+                c_pad = c + 2
+                wn = x_pad[:, r_pad, c_pad, :]
+                wn_uu = x_pad[:, r_pad-2, c_pad, :]
+                wn_u = x_pad[:, r_pad-1, c_pad, :]
+                wn_dd = x_pad[:, r_pad+2, c_pad, :]
+                wn_d = x_pad[:, r_pad+1, c_pad, :]
+                wn_ll = x_pad[:, r_pad, c_pad-2, :]
+                wn_l = x_pad[:, r_pad, c_pad-2, :]
+                wn_rr = x_pad[:, r_pad, c_pad+2, :]
+                wn_r = x_pad[:, r_pad, c_pad+1, :]
+                wn_lu = x_pad[:, r_pad-1, c_pad-1, :]
+                wn_ld = x_pad[:, r_pad+1, c_pad-1, :]
+                wn_ru = x_pad[:, r_pad-1, c_pad+1, :]
+                wn_rd = x_pad[:, r_pad+1, c_pad+1, :]
+                
+                bh_x[:, r, c, :] = (20 * wn +\
+                             wn_ll - 8 * wn_l - 8 * wn_r + wn_rr +\
+                             wn_uu - 8 * wn_u - 8 * wn_d + wn_dd +\
+                             2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
+        
+        # Compute spatial derivatives of y
+        y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3]))
+        y_pad[:, 2:2+rows, 2:2+cols, :] = y[...]
+        
+        bh_y = torch.zeros(y.shape)
+        for r in range(rows):
+            for c in range(cols):
+                r_pad = r + 2
+                c_pad = c + 2
+                wn = x_pad[:, r_pad, c_pad, :]
+                wn_uu = x_pad[:, r_pad-2, c_pad, :]
+                wn_u = x_pad[:, r_pad-1, c_pad, :]
+                wn_dd = x_pad[:, r_pad+2, c_pad, :]
+                wn_d = x_pad[:, r_pad+1, c_pad, :]
+                wn_ll = x_pad[:, r_pad, c_pad-2, :]
+                wn_l = x_pad[:, r_pad, c_pad-2, :]
+                wn_rr = x_pad[:, r_pad, c_pad+2, :]
+                wn_r = x_pad[:, r_pad, c_pad+1, :]
+                wn_lu = x_pad[:, r_pad-1, c_pad-1, :]
+                wn_ld = x_pad[:, r_pad+1, c_pad-1, :]
+                wn_ru = x_pad[:, r_pad-1, c_pad+1, :]
+                wn_rd = x_pad[:, r_pad+1, c_pad+1, :]
+                
+                bh_y[:, r, c, :] = (20 * wn +\
+                             wn_ll - 8 * wn_l - 8 * wn_r + wn_rr +\
+                             wn_uu - 8 * wn_u - 8 * wn_d + wn_dd +\
+                             2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
+        
+        ds_diff_norms = torch.norm(bh_x.reshape(x.shape[0], -1) - bh_y.reshape(y.shape[0], -1), 
+                                   self.p, 
+                                   1)
+        ds_y_norms = torch.norm(bh_y.reshape(y.shape[0], -1), 
+                                self.p, 
+                                1)
+        
+        rel_loss_ds = ds_diff_norms / ds_y_norms
+        
+        dt = 1 / sr
+        x_dt = (x - x_prev) / dt
+        y_dt = (y - y_prev) / dt
+        
+        dt_diff_norms = torch.norm(x_dt.reshape(x.shape[0], -1) - y_dt.reshape(y.shape[0], -1), 
+                                   self.p, 
+                                   1)
+        y_dt_norms = torch.norm(y_dt.reshape(y.shape[0], -1), 
+                                self.p, 
+                                1)
+        
+        rel_loss_dt = dt_diff_norms / y_dt_norms
+        
+        rel_loss_sum = (1 - ds_weight -dt_weight) * rel_loss +\
+                       ds_weight * rel_loss_ds +\
+                       dt_weight * rel_loss_dt
+        
+        if self.reduction:
+            if self.size_average:
+                return torch.mean(rel_loss_sum)
+            else:
+                return torch.sum(rel_loss_sum)
+
+        return rel_loss_sum
+    
     def __call__(self, x, x_prev, y, y_prev):
-        return self.rel(x, x_prev, y, y_prev)
+        return self.rel_dtds(x, x_prev, y, y_prev)
 
 
 
