@@ -361,10 +361,10 @@ class LpLossDelta(object):
         cols = x.shape[2]
         
         # Compute spatial derivatives of x
-        x_pad = torch.zeros((x.shape[0], rows + 4, cols + 4, x.shape[3]))
+        x_pad = torch.zeros((x.shape[0], rows + 4, cols + 4, x.shape[3])).to(x.device)
         x_pad[:, 2:2+rows, 2:2+cols, :] = x[...]
         
-        bh_x = torch.zeros(x.shape)
+        bh_x = torch.zeros(x.shape).to(x.device)
         for r in range(rows):
             for c in range(cols):
                 r_pad = r + 2
@@ -389,10 +389,10 @@ class LpLossDelta(object):
                              2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
         
         # Compute spatial derivatives of y
-        y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3]))
+        y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3])).to(y.device)
         y_pad[:, 2:2+rows, 2:2+cols, :] = y[...]
         
-        bh_y = torch.zeros(y.shape)
+        bh_y = torch.zeros(y.shape).to(y.device)
         for r in range(rows):
             for c in range(cols):
                 r_pad = r + 2
@@ -449,10 +449,10 @@ class LpLossDelta(object):
         cols = x.shape[2]
         
         # Compute spatial derivatives of x
-        x_pad = torch.zeros((x.shape[0], rows + 4, cols + 4, x.shape[3]))
+        x_pad = torch.zeros((x.shape[0], rows + 4, cols + 4, x.shape[3])).to(x.device)
         x_pad[:, 2:2+rows, 2:2+cols, :] = x[...]
         
-        bh_x = torch.zeros(x.shape)
+        bh_x = torch.zeros(x.shape).to(x.device)
         for r in range(rows):
             for c in range(cols):
                 r_pad = r + 2
@@ -477,10 +477,10 @@ class LpLossDelta(object):
                              2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
         
         # Compute spatial derivatives of y
-        y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3]))
+        y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3])).to(y.device)
         y_pad[:, 2:2+rows, 2:2+cols, :] = y[...]
         
-        bh_y = torch.zeros(y.shape)
+        bh_y = torch.zeros(y.shape).to(y.device)
         for r in range(rows):
             for c in range(cols):
                 r_pad = r + 2
