@@ -364,57 +364,25 @@ class LpLossDelta(object):
         x_pad = torch.zeros((x.shape[0], rows + 4, cols + 4, x.shape[3])).to(x.device)
         x_pad[:, 2:2+rows, 2:2+cols, :] = x[...]
         
-        bh_x = torch.zeros(x.shape).to(x.device)
-        for r in range(rows):
-            for c in range(cols):
-                r_pad = r + 2
-                c_pad = c + 2
-                wn = x_pad[:, r_pad, c_pad, :]
-                wn_uu = x_pad[:, r_pad-2, c_pad, :]
-                wn_u = x_pad[:, r_pad-1, c_pad, :]
-                wn_dd = x_pad[:, r_pad+2, c_pad, :]
-                wn_d = x_pad[:, r_pad+1, c_pad, :]
-                wn_ll = x_pad[:, r_pad, c_pad-2, :]
-                wn_l = x_pad[:, r_pad, c_pad-2, :]
-                wn_rr = x_pad[:, r_pad, c_pad+2, :]
-                wn_r = x_pad[:, r_pad, c_pad+1, :]
-                wn_lu = x_pad[:, r_pad-1, c_pad-1, :]
-                wn_ld = x_pad[:, r_pad+1, c_pad-1, :]
-                wn_ru = x_pad[:, r_pad-1, c_pad+1, :]
-                wn_rd = x_pad[:, r_pad+1, c_pad+1, :]
-                
-                bh_x[:, r, c, :] = (20 * wn +\
-                             wn_ll - 8 * wn_l - 8 * wn_r + wn_rr +\
-                             wn_uu - 8 * wn_u - 8 * wn_d + wn_dd +\
-                             2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
+        bh_x = (20 * x_pad[:, 2:2+rows, 2:2+cols, :] +\
+               x_pad[:, 2:2+rows, :cols, :] - 8 * x_pad[:, 2:2+rows, 1:1+cols, :] -\
+               8 * x_pad[:, 2:2+rows, 3:3+cols, :] + x_pad[:, 2:2+rows, 4:4+cols, :] +\
+               x_pad[:, :rows, 2:2+cols, :] - 8 * x_pad[:, 1:1+rows, 2:2+cols, :] -\
+               8 * x_pad[:, 3:3+rows, 2:2+cols, :] + x_pad[:, 4:4+rows, 2:2+cols, :] +\
+               2 * x_pad[:, 1:1+rows, 1:1+cols, :] + 2 * x_pad[:, 3:3+rows, 1:1+cols, :] +\
+               2 * x_pad[:, 1:1+rows, 3:3+cols, :] + 2 * x_pad[:, 3:3+rows, 3:3+cols, :]) / (ds**4)
         
         # Compute spatial derivatives of y
         y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3])).to(y.device)
         y_pad[:, 2:2+rows, 2:2+cols, :] = y[...]
         
-        bh_y = torch.zeros(y.shape).to(y.device)
-        for r in range(rows):
-            for c in range(cols):
-                r_pad = r + 2
-                c_pad = c + 2
-                wn = x_pad[:, r_pad, c_pad, :]
-                wn_uu = x_pad[:, r_pad-2, c_pad, :]
-                wn_u = x_pad[:, r_pad-1, c_pad, :]
-                wn_dd = x_pad[:, r_pad+2, c_pad, :]
-                wn_d = x_pad[:, r_pad+1, c_pad, :]
-                wn_ll = x_pad[:, r_pad, c_pad-2, :]
-                wn_l = x_pad[:, r_pad, c_pad-2, :]
-                wn_rr = x_pad[:, r_pad, c_pad+2, :]
-                wn_r = x_pad[:, r_pad, c_pad+1, :]
-                wn_lu = x_pad[:, r_pad-1, c_pad-1, :]
-                wn_ld = x_pad[:, r_pad+1, c_pad-1, :]
-                wn_ru = x_pad[:, r_pad-1, c_pad+1, :]
-                wn_rd = x_pad[:, r_pad+1, c_pad+1, :]
-                
-                bh_y[:, r, c, :] = (20 * wn +\
-                             wn_ll - 8 * wn_l - 8 * wn_r + wn_rr +\
-                             wn_uu - 8 * wn_u - 8 * wn_d + wn_dd +\
-                             2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
+        bh_y = (20 * y_pad[:, 2:2+rows, 2:2+cols, :] +\
+               y_pad[:, 2:2+rows, :cols, :] - 8 * y_pad[:, 2:2+rows, 1:1+cols, :] -\
+               8 * y_pad[:, 2:2+rows, 3:3+cols, :] + y_pad[:, 2:2+rows, 4:4+cols, :] +\
+               y_pad[:, :rows, 2:2+cols, :] - 8 * y_pad[:, 1:1+rows, 2:2+cols, :] -\
+               8 * y_pad[:, 3:3+rows, 2:2+cols, :] + y_pad[:, 4:4+rows, 2:2+cols, :] +\
+               2 * y_pad[:, 1:1+rows, 1:1+cols, :] + 2 * y_pad[:, 3:3+rows, 1:1+cols, :] +\
+               2 * y_pad[:, 1:1+rows, 3:3+cols, :] + 2 * y_pad[:, 3:3+rows, 3:3+cols, :]) / (ds**4)
         
         ds_diff_norms = torch.norm(bh_x.reshape(x.shape[0], -1) - bh_y.reshape(y.shape[0], -1), 
                                    self.p, 
@@ -452,57 +420,25 @@ class LpLossDelta(object):
         x_pad = torch.zeros((x.shape[0], rows + 4, cols + 4, x.shape[3])).to(x.device)
         x_pad[:, 2:2+rows, 2:2+cols, :] = x[...]
         
-        bh_x = torch.zeros(x.shape).to(x.device)
-        for r in range(rows):
-            for c in range(cols):
-                r_pad = r + 2
-                c_pad = c + 2
-                wn = x_pad[:, r_pad, c_pad, :]
-                wn_uu = x_pad[:, r_pad-2, c_pad, :]
-                wn_u = x_pad[:, r_pad-1, c_pad, :]
-                wn_dd = x_pad[:, r_pad+2, c_pad, :]
-                wn_d = x_pad[:, r_pad+1, c_pad, :]
-                wn_ll = x_pad[:, r_pad, c_pad-2, :]
-                wn_l = x_pad[:, r_pad, c_pad-2, :]
-                wn_rr = x_pad[:, r_pad, c_pad+2, :]
-                wn_r = x_pad[:, r_pad, c_pad+1, :]
-                wn_lu = x_pad[:, r_pad-1, c_pad-1, :]
-                wn_ld = x_pad[:, r_pad+1, c_pad-1, :]
-                wn_ru = x_pad[:, r_pad-1, c_pad+1, :]
-                wn_rd = x_pad[:, r_pad+1, c_pad+1, :]
-                
-                bh_x[:, r, c, :] = (20 * wn +\
-                             wn_ll - 8 * wn_l - 8 * wn_r + wn_rr +\
-                             wn_uu - 8 * wn_u - 8 * wn_d + wn_dd +\
-                             2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
+        bh_x = (20 * x_pad[:, 2:2+rows, 2:2+cols, :] +\
+               x_pad[:, 2:2+rows, :cols, :] - 8 * x_pad[:, 2:2+rows, 1:1+cols, :] -\
+               8 * x_pad[:, 2:2+rows, 3:3+cols, :] + x_pad[:, 2:2+rows, 4:4+cols, :] +\
+               x_pad[:, :rows, 2:2+cols, :] - 8 * x_pad[:, 1:1+rows, 2:2+cols, :] -\
+               8 * x_pad[:, 3:3+rows, 2:2+cols, :] + x_pad[:, 4:4+rows, 2:2+cols, :] +\
+               2 * x_pad[:, 1:1+rows, 1:1+cols, :] + 2 * x_pad[:, 3:3+rows, 1:1+cols, :] +\
+               2 * x_pad[:, 1:1+rows, 3:3+cols, :] + 2 * x_pad[:, 3:3+rows, 3:3+cols, :]) / (ds**4)
         
         # Compute spatial derivatives of y
         y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3])).to(y.device)
         y_pad[:, 2:2+rows, 2:2+cols, :] = y[...]
         
-        bh_y = torch.zeros(y.shape).to(y.device)
-        for r in range(rows):
-            for c in range(cols):
-                r_pad = r + 2
-                c_pad = c + 2
-                wn = x_pad[:, r_pad, c_pad, :]
-                wn_uu = x_pad[:, r_pad-2, c_pad, :]
-                wn_u = x_pad[:, r_pad-1, c_pad, :]
-                wn_dd = x_pad[:, r_pad+2, c_pad, :]
-                wn_d = x_pad[:, r_pad+1, c_pad, :]
-                wn_ll = x_pad[:, r_pad, c_pad-2, :]
-                wn_l = x_pad[:, r_pad, c_pad-2, :]
-                wn_rr = x_pad[:, r_pad, c_pad+2, :]
-                wn_r = x_pad[:, r_pad, c_pad+1, :]
-                wn_lu = x_pad[:, r_pad-1, c_pad-1, :]
-                wn_ld = x_pad[:, r_pad+1, c_pad-1, :]
-                wn_ru = x_pad[:, r_pad-1, c_pad+1, :]
-                wn_rd = x_pad[:, r_pad+1, c_pad+1, :]
-                
-                bh_y[:, r, c, :] = (20 * wn +\
-                             wn_ll - 8 * wn_l - 8 * wn_r + wn_rr +\
-                             wn_uu - 8 * wn_u - 8 * wn_d + wn_dd +\
-                             2 * wn_lu + 2 * wn_ld + 2 * wn_ru + 2 * wn_rd) / (ds**4)
+        bh_y = (20 * y_pad[:, 2:2+rows, 2:2+cols, :] +\
+               y_pad[:, 2:2+rows, :cols, :] - 8 * y_pad[:, 2:2+rows, 1:1+cols, :] -\
+               8 * y_pad[:, 2:2+rows, 3:3+cols, :] + y_pad[:, 2:2+rows, 4:4+cols, :] +\
+               y_pad[:, :rows, 2:2+cols, :] - 8 * y_pad[:, 1:1+rows, 2:2+cols, :] -\
+               8 * y_pad[:, 3:3+rows, 2:2+cols, :] + y_pad[:, 4:4+rows, 2:2+cols, :] +\
+               2 * y_pad[:, 1:1+rows, 1:1+cols, :] + 2 * y_pad[:, 3:3+rows, 1:1+cols, :] +\
+               2 * y_pad[:, 1:1+rows, 3:3+cols, :] + 2 * y_pad[:, 3:3+rows, 3:3+cols, :]) / (ds**4)
         
         ds_diff_norms = torch.norm(bh_x.reshape(x.shape[0], -1) - bh_y.reshape(y.shape[0], -1), 
                                    self.p, 
