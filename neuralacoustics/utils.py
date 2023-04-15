@@ -303,7 +303,7 @@ class LpLoss(object):
 
 #loss function with rel Lp loss and time derivatives
 class LpLossDelta(object):
-    def __init__(self, d=2, p=2, size_average=True, reduction=True):
+    def __init__(self, d=2, p=2, size_average=True, reduction=True, mode='default'):
         super(LpLossDelta, self).__init__()
 
         #Dimension and Lp-norm type are postive
@@ -313,6 +313,7 @@ class LpLossDelta(object):
         self.p = p
         self.reduction = reduction
         self.size_average = size_average
+        self.mode = mode
 
     def rel_dt(self, x, x_prev, y, y_prev, sr=44100., dt_weight=.5):
         diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), 
@@ -462,7 +463,7 @@ class LpLossDelta(object):
         
         rel_loss_dt = dt_diff_norms / y_dt_norms
         
-        rel_loss_sum = (1 - ds_weight -dt_weight) * rel_loss +\
+        rel_loss_sum = (1 - ds_weight - dt_weight) * rel_loss +\
                        ds_weight * rel_loss_ds +\
                        dt_weight * rel_loss_dt
         
@@ -474,8 +475,29 @@ class LpLossDelta(object):
 
         return rel_loss_sum
     
+    def rel(self, x, y):
+        num_examples = x.size()[0]
+
+        diff_norms = torch.norm(x.reshape(num_examples,-1) - y.reshape(num_examples,-1), self.p, 1)
+        y_norms = torch.norm(y.reshape(num_examples,-1), self.p, 1)
+
+        if self.reduction:
+            if self.size_average:
+                return torch.mean(diff_norms/y_norms)
+            else:
+                return torch.sum(diff_norms/y_norms)
+
+        return diff_norms/y_norms
+    
     def __call__(self, x, x_prev, y, y_prev):
-        return self.rel_dtds(x, x_prev, y, y_prev)
+        if self.mode == 'dt':
+            return self.rel_dt(x, x_prev, y, y_prev)
+        elif self.mode == 'ds':
+            return self.rel_ds(x, y)
+        elif self.mode == 'dtds':
+            return self.rel_dtds(x, x_prev, y, y_prev)
+        else:
+            return self.rel(x, y)
 
 
 

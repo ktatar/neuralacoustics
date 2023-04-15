@@ -104,6 +104,7 @@ learning_rate = config['training'].getfloat('learning_rate')
 scheduler_type = config['training'].get('scheduler')
 scheduler_step = config['training'].getint('scheduler_step')
 scheduler_gamma = config['training'].getfloat('scheduler_gamma')
+loss_mode = config['training'].get('loss_mode')
 
 checkpoint_step = config['training'].getint('checkpoint_step')
 
@@ -337,7 +338,7 @@ log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss
 f.write(log_str)
 print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test')
 
-myloss = LpLossDelta(size_average=False)
+myloss = LpLossDelta(size_average=False, mode=loss_mode)
 myloss_full = LpLoss(size_average=False)
 for ep in range(epochs):
     #--------------------------------------------------------
