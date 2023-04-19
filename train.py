@@ -338,8 +338,8 @@ log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss
 f.write(log_str)
 print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test')
 
-myloss = LpLossDelta(size_average=False, mode=loss_mode)
-myloss_full = LpLoss(size_average=False)
+lossFuncDelta = LpLossDelta(size_average=False, mode=loss_mode)
+lossFunc = LpLoss(size_average=False)
 for ep in range(epochs):
     #--------------------------------------------------------
     # train
@@ -362,7 +362,7 @@ for ep in range(epochs):
                 pred = y_normalizer.decode(pred)
                 yy = y_normalizer.decode(yy)
 
-            l2_full = myloss(pred.view(batch_size, -1), yy.view(batch_size, -1))
+            l2_full = lossFuncDelta(pred.view(batch_size, -1), yy.view(batch_size, -1))
             l2_full.backward()
 
             optimizer.step()
@@ -373,26 +373,26 @@ for ep in range(epochs):
             for t in range(0, T_out):
                 y = yy[..., t:t+1]
                 im = model(xx)
-                # loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
+                # loss += lossFuncDelta(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
                 
                 if t == 0:
                     # xx is ground truth input of steps: [0, T_in - 1]
-                    loss += myloss(im, xx[..., -1:], y, xx[..., -1:])
+                    loss += lossFuncDelta(im, xx[..., -1:], y, xx[..., -1:])
 
                     pred = im
                 else:
                     # xx contains previously predicted steps: [t, T_in - 1 + t], 
                     # yy is ground truth outputs: [T_in, T_in + T_out - 1]
-                    loss += myloss(im, xx[..., -1:], y, yy[..., t-1:t])
+                    loss += lossFuncDelta(im, xx[..., -1:], y, yy[..., t-1:t])
                     
                     pred = torch.cat((pred, im), -1)
 
                 xx = torch.cat((xx[..., 1:], im), dim=-1)
 
             train_l2_step += loss.item()
-            l2_full = myloss_full(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
+            l2_full = lossFunc(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
             train_l2_full += l2_full.item()
-            #VIC not sure why not simply train_l2_full += myloss(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
+            #VIC not sure why not simply train_l2_full += lossFunc(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
 
             optimizer.zero_grad()
             loss.backward()
@@ -415,25 +415,25 @@ for ep in range(epochs):
                 if normalize:
                     pred = y_normalizer.decode(pred)
 
-                test_l2_full += myloss(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+                test_l2_full += lossFuncDelta(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
             else:
                 for t in range(0, T_out):
                     y = yy[..., t:t+1]
                     im = model(xx)
-                    # loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
+                    # loss += lossFuncDelta(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
                     if t == 0:
-                        loss += myloss(im, xx[..., -1:], y, xx[..., -1:])
+                        loss += lossFuncDelta(im, xx[..., -1:], y, xx[..., -1:])
                         pred = im
                     else:
-                        loss += myloss(im, xx[..., -1:], y, yy[..., t-1:t])
+                        loss += lossFuncDelta(im, xx[..., -1:], y, yy[..., t-1:t])
                         
                         pred = torch.cat((pred, im), -1)
 
                     xx = torch.cat((xx[..., 1:], im), dim=-1)
 
                 test_l2_step += loss.item()
-                test_l2_full += myloss_full(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+                test_l2_full += lossFunc(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
     
     t2 = default_timer()
     # scheduler.step()
