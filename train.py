@@ -100,13 +100,21 @@ if batch_size>n_test or n_test%batch_size!=0:
 
 epochs = config['training'].getint('epochs')
 
+# the two teacher forcing settings are mutually exclusive, proirity will be given to teacher_forcing_tout
+teacher_forcing_tout = config['training'].getint('teacher_forcing_tout') # train with autoregressive behavior over the T_out steps [works only if not multi-step model]
+teacher_forcing_steps = config['training'].getint('teacher_forcing_steps') # train with autoregressive behavior over any consecutive steps [works for all models]
+
 learning_rate = config['training'].getfloat('learning_rate')
 scheduler_type = config['training'].get('scheduler')
 scheduler_step = config['training'].getint('scheduler_step')
 scheduler_gamma = config['training'].getfloat('scheduler_gamma')
 loss_mode = config['training'].get('loss_mode')
+loss_weight = config['training'].getfloat('loss_weight')
+loss_weight_dt = config['training'].getfloat('loss_weight_dt')
+loss_weight_ds = config['training'].getfloat('loss_weight_ds')
 
 checkpoint_step = config['training'].getint('checkpoint_step')
+
 
 # Normalization
 normalize = config['training'].getint('normalize_data')
@@ -119,6 +127,7 @@ model_root = Path(model_root)
 
 load_model_name = config['training'].get('load_model_name')
 load_model_checkpoint = config['training'].get('load_model_checkpoint')
+transfer_learning = config['training'].getint('transfer_learning') # if set to 1, we will not load optmizer and scheduler
 
 seed = config['training'].getint('seed')
 
@@ -178,6 +187,8 @@ if load_model_name != "":
     print()
     print(f"Load from model: {load_model_name}")
     print(f"Load from checkpoint: {load_model_checkpoint}")
+    if transfer_learning==1:
+        print("Transfer learning active!")
 
 # Determine saved model name and directory
 if load_model_name != "":
@@ -215,7 +226,7 @@ print() # a new line
 t1 = default_timer()
 
 data_manager = DatasetManager(dataset_name, dataset_dir)
-u = data_manager.loadData(
+u, sim_len = data_manager.loadData(
     n=n_train+n_test,
     win=T_in+T_out,
     stride=win_stride,
@@ -322,9 +333,39 @@ prev_ep = 0
 if load_model_name != "":
     state_dict = torch.load(load_model_path)
     model.load_state_dict(state_dict['model_state_dict'])
-    optimizer.load_state_dict(state_dict['optimizer_state_dict'])
-    scheduler.load_state_dict(state_dict['scheduler_state_dict'])
-    prev_ep = state_dict['epoch'] + 1
+    # if transfer learning is active, we will simply load the base model and start tranining from scratch
+    if transfer_learning == 0:
+        optimizer.load_state_dict(state_dict['optimizer_state_dict'])
+        scheduler.load_state_dict(state_dict['scheduler_state_dict'])
+        prev_ep = state_dict['epoch'] + 1
+
+
+
+
+#-------------------------------------------------------------------------------
+# teacher forcing
+
+# works only if not multi-step model and more than one T_out step
+if inference_type == 'multiple_step' or T_out == 1:
+    teacher_forcing_tout = 0
+
+
+# if the stride is bigger than T_out, we cannot run an autoregressive train, 
+# because the input to the next step cannot be completely taken from the outputs of current step
+if win_stride > T_out or teacher_forcing_tout != 0:
+    teacher_forcing_steps = 0
+else:
+    #  the maximum number of auto regressive step we do is the total number of points in each simulation, minus 1
+    max_autregr_steps = int(( sim_len - (T_in+T_out) ) / win_stride) # here sim_len takes into account the chosen win_lim
+    if teacher_forcing_steps > max_autregr_steps:
+        teacher_forcing_steps = max_autregr_steps
+
+if teacher_forcing_steps>0:
+    print(f'\nTeacher forcing enabled on {teacher_forcing_steps} consecutive steps')
+elif teacher_forcing_tout==1:
+    print(f'\nTeacher forcing enabled on model\'s {T_out} T_out steps')
+elif T_out > 1 and inference_type == 'multiple_step':
+    print(f'\nTraining averaged over model\' s {T_out} T_out steps')
 
 #-------------------------------------------------------------------------------
 # train!
@@ -338,8 +379,11 @@ log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss
 f.write(log_str)
 print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test')
 
-lossFuncDelta = LpLossDelta(size_average=False, mode=loss_mode)
-lossFunc = LpLoss(size_average=False)
+lossFuncDelta = LpLossDelta(size_average=False, weight=loss_weight, weight_dt=loss_weight_dt, weight_ds=loss_weight_ds)
+lossFunc = LpLossDelta(size_average=False)
+
+
+
 for ep in range(epochs):
     #--------------------------------------------------------
     # train
@@ -347,12 +391,23 @@ for ep in range(epochs):
     t1 = default_timer()
     train_l2_step = 0
     train_l2_full = 0
+    pnt_cnt_train = 0
     for xx, yy in train_loader:
+        
         loss = 0
-        xx = xx.to(dev)
+        # we always extract a new label...
         yy = yy.to(dev)
+        # while inputs only if not in autoregressive step
+        if teacher_forcing_steps < 1 or (pnt_cnt_train % teacher_forcing_steps) == 0:
+            xx = xx.to(dev)
+            pnt_cnt_train = 0
 
-        if inference_type == 'multiple_step': # TODO: add time derivative loss for FNO3D
+        # this is to prevent that a series of autoregressive steps happens across two simulations!
+        pnt_cnt_train += 1
+        if (T_in+T_out + pnt_cnt_train*win_stride) >= sim_len:
+            pnt_cnt_train = 0
+
+        if inference_type == 'multiple_step': 
             # model outputs T_out timestep at a time
             optimizer.zero_grad()
 
@@ -362,14 +417,20 @@ for ep in range(epochs):
                 pred = y_normalizer.decode(pred)
                 yy = y_normalizer.decode(yy)
 
-            l2_full = lossFuncDelta(pred.view(batch_size, -1), yy.view(batch_size, -1))
+            # autoregression [xx will be overidden with new feautures if teacher forcing is off]
+            pred_copy = pred.reshape(n_train,S,S,1,T_out).repeat([1,1,1,T_out,1]) # reshape to prepare for concat
+            xx_copy = torch.cat((xx[..., win_stride:], pred_copy[..., :win_stride]), dim=-1)  # concat and make a copy of xx
+            xx = xx_copy.clone().detach()  # detach the copy to prevent backprop through it
+
+            assert(weight_dt==0) # TODO: add time derivative loss for FNO3D
+            l2_full = lossFuncDelta(pred.view(batch_size, -1), yy.view(batch_size, -1)) 
             l2_full.backward()
 
             optimizer.step()
             scheduler.step()
             train_l2_full += l2_full.item()
         else:
-            # model outputs 1 timestep at a time [i.e., labels], so we iterate over T_out steps to compute loss
+            # model outputs 1 timestep at a time [i.e., labels], so we iterate over T_out steps to cumulative compute loss
             for t in range(0, T_out):
                 y = yy[..., t:t+1]
                 im = model(xx)
@@ -377,43 +438,69 @@ for ep in range(epochs):
                 
                 if t == 0:
                     # xx is ground truth input of steps: [0, T_in - 1]
-                    loss += lossFuncDelta(im, xx[..., -1:], y, xx[..., -1:])
+                    loss += lossFuncDelta(im, y, xx[..., -1:], xx[..., -1:])
 
                     pred = im
                 else:
                     # xx contains previously predicted steps: [t, T_in - 1 + t], 
                     # yy is ground truth outputs: [T_in, T_in + T_out - 1]
-                    loss += lossFuncDelta(im, xx[..., -1:], y, yy[..., t-1:t])
+                    loss += lossFuncDelta(im, y, xx[..., -1:], yy[..., t-1:t])
                     
                     pred = torch.cat((pred, im), -1)
 
-                xx = torch.cat((xx[..., 1:], im), dim=-1)
+                # autoregression [xx will be overidden with new feautures if teacher forcing is off]
+                xx_copy = torch.cat((xx[..., 1:], im), dim=-1)  # concat make a copy of xx
+                xx = xx_copy.clone().detach()  # detach the copy to prevent backprop through it
 
-            train_l2_step += loss.item()
+                if teacher_forcing_tout != 0:
+                    train_l2_step += loss.item() # add loss for current out step
+                    optimizer.zero_grad()
+                    loss.backward(retain_graph=True)                    
+                    optimizer.step()
+                    scheduler.step()
+                    loss = 0
+            
             l2_full = lossFunc(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
             train_l2_full += l2_full.item()
             #VIC not sure why not simply train_l2_full += lossFunc(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+            if teacher_forcing_tout == 0:
+                train_l2_step += loss.item() # add bulk loss for T_out steps
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                scheduler.step()
 
     #--------------------------------------------------------
     # test
     test_l2_step = 0
     test_l2_full = 0
     model.eval()
+    pnt_cnt_test = 0
     with torch.no_grad():
         for xx, yy in test_loader:
             loss = 0
-            xx = xx.to(dev)
+
+            # we always extract a new label...
             yy = yy.to(dev)
+            # while inputs only if not in autoregressive step
+            if teacher_forcing_steps < 1 or (pnt_cnt_train % teacher_forcing_steps) == 0:
+                xx = xx.to(dev)
+                pnt_cnt_train = 0
+
+            # this is to prevent that a series of autoregressive steps happens across two simulations!
+            pnt_cnt_train += 1
+            if (T_in+T_out + pnt_cnt_train*win_stride) >= sim_len:
+                pnt_cnt_train = 0
 
             if inference_type == 'multiple_step':
                 pred = model(xx).view(batch_size, S, S, T_out)
                 if normalize:
                     pred = y_normalizer.decode(pred)
+
+                # autoregression [xx will be overidden with new feautures if teacher forcing is off]
+                pred = pred.reshape(n_train,S,S,1,T_out).repeat([1,1,1,T_out,1]) # reshape to prepare for concat
+                x = torch.cat((xx[..., win_stride:], pred_copy[..., :win_stride]), dim=-1)  # concat
 
                 test_l2_full += lossFuncDelta(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
             else:
@@ -423,17 +510,23 @@ for ep in range(epochs):
                     # loss += lossFuncDelta(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
                     if t == 0:
-                        loss += lossFuncDelta(im, xx[..., -1:], y, xx[..., -1:])
+                        loss += lossFuncDelta(im, y, xx[..., -1:], xx[..., -1:])
                         pred = im
                     else:
-                        loss += lossFuncDelta(im, xx[..., -1:], y, yy[..., t-1:t])
+                        loss += lossFuncDelta(im, y, xx[..., -1:], yy[..., t-1:t])
                         
                         pred = torch.cat((pred, im), -1)
 
-                    xx = torch.cat((xx[..., 1:], im), dim=-1)
+                    # autoregression [xx will be overidden with new feautures if teacher forcing is off]
+                    xx = torch.cat((xx[..., 1:], im), dim=-1)  # concat
+                    if teacher_forcing_tout != 0:
+                        test_l2_step += loss.item() # add loss for current out step
+                        loss = 0
 
-                test_l2_step += loss.item()
                 test_l2_full += lossFunc(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+                
+                if teacher_forcing_tout == 0:
+                    test_l2_step += loss.item() # add bulk loss for T_out steps
     
     t2 = default_timer()
     # scheduler.step()

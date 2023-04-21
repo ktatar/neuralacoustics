@@ -129,17 +129,14 @@ if dryrun == 0:
     
     # initial conditions
     #a = torch.zeros(ch_size, h, w) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
-    
     # solutions
     u = torch.zeros(ch_size, h, w, nsteps+1) # +1 becase initial condition is saved at beginning of solution time series!
-    
     
     ch_cnt = 0 #keeps track of # of chunks, datapoints during loop.
     n_cnt=0
     
     t1 = default_timer()
     for b in range(num_of_batches):
-
         # compute all steps in full batch
         sol, sol_t = generator.generate_datasetBatch(dev, dryrun) #generates dataset.
         

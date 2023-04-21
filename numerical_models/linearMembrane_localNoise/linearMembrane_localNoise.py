@@ -160,10 +160,10 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, d
 
     return [sol, sol_t]
 
-def run_test(dev, dispRate=1, pause=0):
+def run_test(dev, display, dispRate=1, pause=0):
     # set parameters
     _b = 1
-    _disp = True
+    _disp = display
     
     noise_submatrix = torch.zeros(_b, h-2, w-2)
     noise_submatrix[0, ex_y[0]: ex_y[0]+ex_size[0], ex_x[0]: ex_x[0]+ex_size[0]] = torch.randn(ex_size[0],ex_size[0])
@@ -171,7 +171,7 @@ def run_test(dev, dispRate=1, pause=0):
     #call run using those parameters+global variables, and return the result.
     test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, _disp, dispRate, pause)
     
-    return [test_sol, test_sol_t]
+    return [test_sol, test_sol_t, dt]
 
 def getSolverInfo():
     if solver == 0:

@@ -147,17 +147,17 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, c, tube_x, tube_y, tube_length, tube_
     sol, sol_t = solver.run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, disp=disp, dispRate=dispRate, pause=pause)
     return [sol, sol_t]
 
-def run_test(dev, dispRate=1, pause=0):
+def run_test(dev, display, dispRate=1, pause=0):
     # set parameters
     _b = 1
-    _disp = True
+    _disp = display
     _dispRate = 1/1
     _pause = 0
 
     #call run using those parameters+global variables, and return the result.
     test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, c, tube_x, tube_y, tube_length, tube_width, ex_mag, disp =_disp, dispRate=_dispRate, pause=_pause)
     
-    return [test_sol, test_sol_t]
+    return [test_sol, test_sol_t, dt]
 
 
 def getSolverInfo():

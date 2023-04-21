@@ -303,7 +303,7 @@ class LpLoss(object):
 
 #loss function with rel Lp loss and time derivatives
 class LpLossDelta(object):
-    def __init__(self, d=2, p=2, size_average=True, reduction=True, mode='default'):
+    def __init__(self, d=2, p=2, size_average=True, reduction=True, weight=1, weight_dt=0, weight_ds=0, srate=44100.):
         super(LpLossDelta, self).__init__()
 
         #Dimension and Lp-norm type are postive
@@ -313,9 +313,23 @@ class LpLossDelta(object):
         self.p = p
         self.reduction = reduction
         self.size_average = size_average
-        self.mode = mode
+        self.weight = weight
+        self.weight_dt = weight_dt
+        self.weight_ds = weight_ds
 
-    def rel_dt(self, x, x_prev, y, y_prev, sr=44100., dt_weight=.5):
+        self.mode = 'default'
+
+        if weight_dt > 0 and weight_ds > 0:
+            self.mode = 'dtds'
+        elif weight_dt > 0:
+            self.mode = 'dt'
+        elif weight_ds > 0:
+            self.mode = 'ds'
+        
+        self.dt = 1 / srate
+        self.ds = .01 # we use a fixed reasonable value, as the concept spatial resolution is not always straightforward in numerical models
+
+    def rel_dt(self, x, x_prev, y, y_prev):
         diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), 
                                 self.p, 
                                 1)
@@ -325,9 +339,8 @@ class LpLossDelta(object):
 
         rel_loss = diff_norms / y_norms
         
-        dt = 1 / sr
-        x_dt = (x - x_prev) / dt
-        y_dt = (y - y_prev) / dt
+        x_dt = (x - x_prev) / self.dt
+        y_dt = (y - y_prev) / self.dt
         
         dt_diff_norms = torch.norm(x_dt.reshape(x.shape[0], -1) - y_dt.reshape(y.shape[0], -1), 
                                    self.p, 
@@ -338,7 +351,7 @@ class LpLossDelta(object):
         
         rel_loss_dt = dt_diff_norms / y_dt_norms
         
-        rel_loss_sum = (1 - dt_weight) * rel_loss + dt_weight * rel_loss_dt
+        rel_loss_sum = (1 - self.weight_dt) * rel_loss + self.weight_dt * rel_loss_dt
         
         if self.reduction:
             if self.size_average:
@@ -348,7 +361,7 @@ class LpLossDelta(object):
 
         return rel_loss_sum
 
-    def rel_ds(self, x, y, ds=.01, ds_weight=.5):
+    def rel_ds(self, x, y):
         diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), 
                                 self.p, 
                                 1)
@@ -371,7 +384,7 @@ class LpLossDelta(object):
                x_pad[:, :rows, 2:2+cols, :] - 8 * x_pad[:, 1:1+rows, 2:2+cols, :] -\
                8 * x_pad[:, 3:3+rows, 2:2+cols, :] + x_pad[:, 4:4+rows, 2:2+cols, :] +\
                2 * x_pad[:, 1:1+rows, 1:1+cols, :] + 2 * x_pad[:, 3:3+rows, 1:1+cols, :] +\
-               2 * x_pad[:, 1:1+rows, 3:3+cols, :] + 2 * x_pad[:, 3:3+rows, 3:3+cols, :]) / (ds**4)
+               2 * x_pad[:, 1:1+rows, 3:3+cols, :] + 2 * x_pad[:, 3:3+rows, 3:3+cols, :]) / (self.ds**4)
         
         # Compute spatial derivatives of y
         y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3])).to(y.device)
@@ -383,7 +396,7 @@ class LpLossDelta(object):
                y_pad[:, :rows, 2:2+cols, :] - 8 * y_pad[:, 1:1+rows, 2:2+cols, :] -\
                8 * y_pad[:, 3:3+rows, 2:2+cols, :] + y_pad[:, 4:4+rows, 2:2+cols, :] +\
                2 * y_pad[:, 1:1+rows, 1:1+cols, :] + 2 * y_pad[:, 3:3+rows, 1:1+cols, :] +\
-               2 * y_pad[:, 1:1+rows, 3:3+cols, :] + 2 * y_pad[:, 3:3+rows, 3:3+cols, :]) / (ds**4)
+               2 * y_pad[:, 1:1+rows, 3:3+cols, :] + 2 * y_pad[:, 3:3+rows, 3:3+cols, :]) / (self.ds**4)
         
         ds_diff_norms = torch.norm(bh_x.reshape(x.shape[0], -1) - bh_y.reshape(y.shape[0], -1), 
                                    self.p, 
@@ -394,7 +407,7 @@ class LpLossDelta(object):
         
         rel_loss_ds = ds_diff_norms / ds_y_norms
         
-        rel_loss_sum = (1 - ds_weight) * rel_loss + ds_weight * rel_loss_ds
+        rel_loss_sum = (1 - self.weight_ds) * rel_loss + self.weight_ds * rel_loss_ds
         
         if self.reduction:
             if self.size_average:
@@ -404,7 +417,7 @@ class LpLossDelta(object):
 
         return rel_loss_sum
     
-    def rel_dtds(self, x, x_prev, y, y_prev, ds=.01, sr=44100., dt_weight=.4, ds_weight=.3):
+    def rel_dtds(self, x, x_prev, y, y_prev):
         diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), 
                                 self.p, 
                                 1)
@@ -427,7 +440,7 @@ class LpLossDelta(object):
                x_pad[:, :rows, 2:2+cols, :] - 8 * x_pad[:, 1:1+rows, 2:2+cols, :] -\
                8 * x_pad[:, 3:3+rows, 2:2+cols, :] + x_pad[:, 4:4+rows, 2:2+cols, :] +\
                2 * x_pad[:, 1:1+rows, 1:1+cols, :] + 2 * x_pad[:, 3:3+rows, 1:1+cols, :] +\
-               2 * x_pad[:, 1:1+rows, 3:3+cols, :] + 2 * x_pad[:, 3:3+rows, 3:3+cols, :]) / (ds**4)
+               2 * x_pad[:, 1:1+rows, 3:3+cols, :] + 2 * x_pad[:, 3:3+rows, 3:3+cols, :]) / (self.ds**4)
         
         # Compute spatial derivatives of y
         y_pad = torch.zeros((y.shape[0], rows + 4, cols + 4, y.shape[3])).to(y.device)
@@ -439,7 +452,7 @@ class LpLossDelta(object):
                y_pad[:, :rows, 2:2+cols, :] - 8 * y_pad[:, 1:1+rows, 2:2+cols, :] -\
                8 * y_pad[:, 3:3+rows, 2:2+cols, :] + y_pad[:, 4:4+rows, 2:2+cols, :] +\
                2 * y_pad[:, 1:1+rows, 1:1+cols, :] + 2 * y_pad[:, 3:3+rows, 1:1+cols, :] +\
-               2 * y_pad[:, 1:1+rows, 3:3+cols, :] + 2 * y_pad[:, 3:3+rows, 3:3+cols, :]) / (ds**4)
+               2 * y_pad[:, 1:1+rows, 3:3+cols, :] + 2 * y_pad[:, 3:3+rows, 3:3+cols, :]) / (self.ds**4)
         
         ds_diff_norms = torch.norm(bh_x.reshape(x.shape[0], -1) - bh_y.reshape(y.shape[0], -1), 
                                    self.p, 
@@ -450,9 +463,8 @@ class LpLossDelta(object):
         
         rel_loss_ds = ds_diff_norms / ds_y_norms
         
-        dt = 1 / sr
-        x_dt = (x - x_prev) / dt
-        y_dt = (y - y_prev) / dt
+        x_dt = (x - x_prev) / self.dt
+        y_dt = (y - y_prev) / self.dt
         
         dt_diff_norms = torch.norm(x_dt.reshape(x.shape[0], -1) - y_dt.reshape(y.shape[0], -1), 
                                    self.p, 
@@ -463,9 +475,9 @@ class LpLossDelta(object):
         
         rel_loss_dt = dt_diff_norms / y_dt_norms
         
-        rel_loss_sum = (1 - ds_weight - dt_weight) * rel_loss +\
-                       ds_weight * rel_loss_ds +\
-                       dt_weight * rel_loss_dt
+        rel_loss_sum = (1 - self.weight_ds - self.weight_dt) * rel_loss +\
+                       self.weight_ds * rel_loss_ds +\
+                       self.weight_dt * rel_loss_dt
         
         if self.reduction:
             if self.size_average:
@@ -489,7 +501,7 @@ class LpLossDelta(object):
 
         return diff_norms/y_norms
     
-    def __call__(self, x, x_prev, y, y_prev):
+    def __call__(self, x, y, x_prev=0, y_prev=0):
         if self.mode == 'dt':
             return self.rel_dt(x, x_prev, y, y_prev)
         elif self.mode == 'ds':

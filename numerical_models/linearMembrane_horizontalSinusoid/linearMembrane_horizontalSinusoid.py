@@ -194,16 +194,16 @@ def run(dev, b, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, e
 
     return [sol, sol_t]
 
-def run_test(dev, dispRate=1, pause=0):
+def run_test(dev, display, dispRate=1, pause=0):
     # set parameters
     _b = 1
-    _disp = True
+    _disp = display
     
     
     #call run using those parameters+global variables, and return the result.
     test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_input_freq, ex_input_mag, ex_input_phase, _disp, dispRate, pause)
     
-    return [test_sol, test_sol_t]
+    return [test_sol, test_sol_t, dt]
 
 
 def getSolverInfo():

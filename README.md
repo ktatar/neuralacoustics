@@ -83,7 +83,7 @@ The key features of the data generation pipeline also apply to the training and 
 3. Create and activate new environment:
 
 	```
-	conda create --name YOUR_ENV python=3.7
+	conda create --name YOUR_ENV python=3.8
 	conda activate YOUR_ENV
 	```
 

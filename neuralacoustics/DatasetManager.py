@@ -57,11 +57,13 @@ class DatasetManager:
         # Modify total timestep if window limit is applied
         if win_lim > 0 and win_lim < self.T and win_lim >= win:
             self.T = win_lim
+        else:
+            win_lim = self.T
 
         # Check that window size is smaller than number of timesteps per each data entry
         assert (self.T >= win)
 
-        return start_ch, win, stride
+        return start_ch, win, stride, win_lim
 
     def checkDatapointNum(self, n, p_num, start_ch):
         """Check whether there are enought datapoints."""
@@ -75,7 +77,7 @@ class DatasetManager:
     def loadData(self, n, win, stride=0, win_lim=0, start_ch=0, permute=False):
         """Load a subsection of dataset for training."""
         # Check and modify arguments
-        start_ch, win, stride = self.checkArgs(start_ch, win, stride, win_lim)
+        start_ch, win, stride, win_lim = self.checkArgs(start_ch, win, stride, win_lim)
 
         # number of points per each dataset entry
         p_num = int((self.T - win) / stride) + 1
@@ -128,7 +130,7 @@ class DatasetManager:
             u = u[torch.randperm(u.shape[0]), ...]
             print(f'\tWith permutation of points')
 
-        return u
+        return u, win_lim
 
     def loadDataEntry(self, n, win, entry, stride=1, offset=0):
         """Load data from one single data entry."""
