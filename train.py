@@ -355,7 +355,7 @@ if inference_type == 'multiple_step' or T_out == 1:
 if win_stride > T_out or teacher_forcing_tout != 0:
     teacher_forcing_steps = 0
 else:
-    #  the maximum number of auto regressive step we do is the total number of points in each simulation, minus 1
+    #  the maximum number of auto regressive steps we cam do is the total number of points in each simulation, minus 1
     max_autregr_steps = int(( sim_len - (T_in+T_out) ) / win_stride) # here sim_len takes into account the chosen win_lim
     if teacher_forcing_steps > max_autregr_steps:
         teacher_forcing_steps = max_autregr_steps
@@ -392,19 +392,18 @@ for ep in range(epochs):
     train_l2_step = 0
     train_l2_full = 0
     pnt_cnt_train = 0
-    for xx, yy in train_loader:
+    for x_, yy in train_loader:
         
         loss = 0
         # we always extract a new label...
         yy = yy.to(dev)
         # while inputs only if not in autoregressive step
         if teacher_forcing_steps < 1 or (pnt_cnt_train % teacher_forcing_steps) == 0:
-            xx = xx.to(dev)
-            pnt_cnt_train = 0
+            xx = x_.to(dev)
 
         # this is to prevent that a series of autoregressive steps happens across two simulations!
         pnt_cnt_train += 1
-        if (T_in+T_out + pnt_cnt_train*win_stride) >= sim_len:
+        if pnt_cnt_train >= teacher_forcing_steps or (T_in+T_out + pnt_cnt_train*win_stride) >= sim_len:
             pnt_cnt_train = 0
 
         if inference_type == 'multiple_step': 
