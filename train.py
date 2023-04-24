@@ -1,6 +1,7 @@
 import torch
 from timeit import default_timer
 import configparser
+import math
 from pathlib import Path
 from datetime import datetime # for current date time in name of model
 import socket # for hostname in name of model
@@ -102,7 +103,14 @@ epochs = config['training'].getint('epochs')
 
 # the two teacher forcing settings are mutually exclusive, proirity will be given to teacher_forcing_tout
 teacher_forcing_tout = config['training'].getint('teacher_forcing_tout') # train with autoregressive behavior over the T_out steps [works only if not multi-step model]
+# works only if not multi-step model and more than one T_out step
+if inference_type == 'multiple_step' or T_out == 1:
+    teacher_forcing_tout = 0
 teacher_forcing_steps = config['training'].getint('teacher_forcing_steps') # train with autoregressive behavior over any consecutive steps [works for all models]
+# if the stride is bigger than T_out, we cannot run an autoregressive train, 
+# because the input to the next step cannot be completely taken from the outputs of current step
+if win_stride > T_out or teacher_forcing_tout != 0 or teacher_forcing_steps == 1:
+    teacher_forcing_steps = 0
 
 learning_rate = config['training'].getfloat('learning_rate')
 scheduler_type = config['training'].get('scheduler')
@@ -136,11 +144,9 @@ dev = config['training'].get('dev')
 print('Model and training parameters:')
 print(f'\tdataset name: {dataset_name}')
 print(f'\trequested training data points: {n_train}')
-print(f'\trequested training test points: {n_test}')
+print(f'\trequested test data points: {n_test}')
 print(f'\tinput steps: {T_in}')
 print(f'\toutput steps: {T_out}')
-# print(f'\tmodes: {modes}')
-# print(f'\twidth: {width}')
 print(f'\tbatch size: {batch_size}')
 print(f'\tepochs: {epochs}')
 print(f'\tlearning_rate: {learning_rate}')
@@ -225,9 +231,31 @@ print() # a new line
 
 t1 = default_timer()
 
+# n_train -> number of requested training examples, each composed of (features, label)
+# n_train_p -> number of datapoints needed to have the requested training examples
+# in general, each datapoint that we extract from the dataset is a single training/test example 
+n_train_p = n_train
+n_test_p = n_test
+
+# but in the case of teacher training across T_out output steps, each datapoint is a window of T_out examples!
+# so we request fewer datapoints
+if teacher_forcing_tout == 1:
+    n_train_p = math.ceil(n_train / T_out)
+    n_test_p = math.ceil(n_test / T_out)
+    print(f'\tdata points will be extracted as {n_train_p+n_test_p} windows of {T_out} points each')
+    # if n_train is not a multiple of T_out, we cannot get n_train examples exactly, so we approximate by excess
+    if (n_train_p % T_out) != 0:
+        n_train = n_train_p * T_out
+        print(f'\ttraining data points increased to {n_train}, due to size of exctraction window')
+    if (n_test_p % T_out) != 0:
+        n_test = n_test_p * T_out
+        print(f'\ttest data points increased to {n_train}, due to size of exctraction window')
+    print()
+
+
 data_manager = DatasetManager(dataset_name, dataset_dir)
 u, sim_len = data_manager.loadData(
-    n=n_train+n_test,
+    n=n_train_p+n_test_p, # these are the requested datapoints
     win=T_in+T_out,
     stride=win_stride,
     win_lim=win_limit,
@@ -242,10 +270,10 @@ S = sh[1]
 assert(S == sh[2])
 
 # prepare train and test sets 
-train_a = u[:n_train,:,:,:T_in]
-train_u = u[:n_train,:,:,T_in:T_in+T_out]
-test_a = u[-n_test:,:,:,:T_in]
-test_u = u[-n_test:,:,:,T_in:T_in+T_out]
+train_a = u[:n_train_p,:,:,:T_in]
+train_u = u[:n_train_p,:,:,T_in:T_in+T_out]
+test_a = u[-n_test_p:,:,:,:T_in]
+test_u = u[-n_test_p:,:,:,T_in:T_in+T_out]
 
 a_normalizer = None
 y_normalizer = None
@@ -263,11 +291,11 @@ assert(S == train_u.shape[-2])
 assert(T_out == train_u.shape[-1])
 
 if inference_type == 'multiple_step':
-    train_a = train_a.reshape(n_train,S,S,1,T_in).repeat([1,1,1,T_out,1])
-    test_a = test_a.reshape(n_test,S,S,1,T_in).repeat([1,1,1,T_out,1])
+    train_a = train_a.reshape(n_train_p,S,S,1,T_in).repeat([1,1,1,T_out,1])
+    test_a = test_a.reshape(n_test_p,S,S,1,T_in).repeat([1,1,1,T_out,1])
 else:
-    train_a = train_a.reshape(n_train,S,S,T_in)
-    test_a = test_a.reshape(n_test,S,S,T_in)
+    train_a = train_a.reshape(n_train_p,S,S,T_in)
+    test_a = test_a.reshape(n_test_p,S,S,T_in)
 
 if platform == 'darwin':
     num_workers = 0 
@@ -345,17 +373,8 @@ if load_model_name != "":
 #-------------------------------------------------------------------------------
 # teacher forcing
 
-# works only if not multi-step model and more than one T_out step
-if inference_type == 'multiple_step' or T_out == 1:
-    teacher_forcing_tout = 0
-
-
-# if the stride is bigger than T_out, we cannot run an autoregressive train, 
-# because the input to the next step cannot be completely taken from the outputs of current step
-if win_stride > T_out or teacher_forcing_tout != 0:
-    teacher_forcing_steps = 0
-else:
-    #  the maximum number of auto regressive steps we cam do is the total number of points in each simulation, minus 1
+if teacher_forcing_steps > 1:
+    #  the maximum number of auto regressive steps we can do is the total number of points in each simulation, minus 1
     max_autregr_steps = int(( sim_len - (T_in+T_out) ) / win_stride) # here sim_len takes into account the chosen win_lim
     if teacher_forcing_steps > max_autregr_steps:
         teacher_forcing_steps = max_autregr_steps
@@ -375,12 +394,18 @@ t1 = default_timer()
 
 # log and print headers
 # not using same string due to formatting visualization differences
-log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test'
+if inference_type == 'multiple_step' or (T_out > 1 and teacher_forcing_tout == 0): 
+    log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test'
+    print_str = 'Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test'
+else: # single step or teacher forcing on T_out output steps
+    log_str = 'Epoch\tDuration\t\t\t\tLossTrain\t\t\tLoss Test'
+    print_str = 'Epoch\tDuration\t\t\tLoss Train\t\t\tLoss Test'
+
 f.write(log_str)
-print('Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test')
+print(print_str)
 
 lossFuncDelta = LpLossDelta(size_average=False, weight=loss_weight, weight_dt=loss_weight_dt, weight_ds=loss_weight_ds)
-lossFunc = LpLossDelta(size_average=False)
+lossFunc = LpLossDelta(size_average=False) # TODO: remove this once we have gradient and time derivative loss for multiple step case
 
 
 
@@ -417,23 +442,28 @@ for ep in range(epochs):
                 yy = y_normalizer.decode(yy)
 
             # autoregression [xx will be overidden with new feautures if teacher forcing is off]
-            pred_copy = pred.reshape(n_train,S,S,1,T_out).repeat([1,1,1,T_out,1]) # reshape to prepare for concat
+            pred_copy = pred.reshape(batch_size,S,S,1,T_out).repeat([1,1,1,T_out,1]) # reshape to prepare for concat
             xx_copy = torch.cat((xx[..., win_stride:], pred_copy[..., :win_stride]), dim=-1)  # concat and make a copy of xx
             xx = xx_copy.clone().detach()  # detach the copy to prevent backprop through it
 
-            assert(weight_dt==0) # TODO: add time derivative loss for FNO3D
+            assert(loss_weight_ds==0) # TODO: add gradient loss for FNO3D/T_out > 1
+            assert(loss_weight_dt==0) # TODO: add time derivative loss for FNO3D/T_out > 1
             l2_full = lossFuncDelta(pred.view(batch_size, -1), yy.view(batch_size, -1)) 
             l2_full.backward()
-
             optimizer.step()
-            scheduler.step()
+            scheduler.step() 
+            # overall T_out steps loss
             train_l2_full += l2_full.item()
+
+            # accumulated T_out steps loss
+            for t in range(0, T_out):
+                l2_step = lossFunc(pred[..., -T_out+t], yy[..., -T_out+t])
+                train_l2_step += l2_step.item()
         else:
             # model outputs 1 timestep at a time [i.e., labels], so we iterate over T_out steps to cumulative compute loss
             for t in range(0, T_out):
                 y = yy[..., t:t+1]
                 im = model(xx)
-                # loss += lossFuncDelta(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
                 
                 if t == 0:
                     # xx is ground truth input of steps: [0, T_in - 1]
@@ -452,19 +482,21 @@ for ep in range(epochs):
                 xx = xx_copy.clone().detach()  # detach the copy to prevent backprop through it
 
                 if teacher_forcing_tout != 0:
-                    train_l2_step += loss.item() # add loss for current out step
+                    train_l2_step += loss.item() # accumulate loss for current out step
                     optimizer.zero_grad()
                     loss.backward(retain_graph=True)                    
                     optimizer.step()
                     scheduler.step()
                     loss = 0
             
-            l2_full = lossFunc(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
-            train_l2_full += l2_full.item()
-            #VIC not sure why not simply train_l2_full += lossFunc(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
+            # overall T_out steps loss
+            if T_out > 1:
+                # TODO: add gradient and time derivative loss for FNO3D/T_out > 1
+                l2_full = lossFunc(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
+                train_l2_full += l2_full.item()
 
             if teacher_forcing_tout == 0:
-                train_l2_step += loss.item() # add bulk loss for T_out steps
+                train_l2_step += loss.item() # accumulate bulk loss for T_out steps
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -477,20 +509,19 @@ for ep in range(epochs):
     model.eval()
     pnt_cnt_test = 0
     with torch.no_grad():
-        for xx, yy in test_loader:
+        for x_, yy in test_loader:
             loss = 0
 
             # we always extract a new label...
             yy = yy.to(dev)
             # while inputs only if not in autoregressive step
-            if teacher_forcing_steps < 1 or (pnt_cnt_train % teacher_forcing_steps) == 0:
-                xx = xx.to(dev)
-                pnt_cnt_train = 0
+            if teacher_forcing_steps < 1 or (pnt_cnt_test % teacher_forcing_steps) == 0:
+                xx = x_.to(dev)
 
             # this is to prevent that a series of autoregressive steps happens across two simulations!
-            pnt_cnt_train += 1
-            if (T_in+T_out + pnt_cnt_train*win_stride) >= sim_len:
-                pnt_cnt_train = 0
+            pnt_cnt_test += 1
+            if pnt_cnt_test >= teacher_forcing_steps or (T_in+T_out + pnt_cnt_test*win_stride) >= sim_len:
+                pnt_cnt_test = 0
 
             if inference_type == 'multiple_step':
                 pred = model(xx).view(batch_size, S, S, T_out)
@@ -498,15 +529,19 @@ for ep in range(epochs):
                     pred = y_normalizer.decode(pred)
 
                 # autoregression [xx will be overidden with new feautures if teacher forcing is off]
-                pred = pred.reshape(n_train,S,S,1,T_out).repeat([1,1,1,T_out,1]) # reshape to prepare for concat
-                x = torch.cat((xx[..., win_stride:], pred_copy[..., :win_stride]), dim=-1)  # concat
+                pred_copy = pred.reshape(batch_size,S,S,1,T_out).repeat([1,1,1,T_out,1]) # reshape to prepare for concat
+                xx = torch.cat((xx[..., win_stride:], pred_copy[..., :win_stride]), dim=-1)  # concat
 
-                test_l2_full += lossFuncDelta(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+                # TODO: add gradient and time derivative loss for FNO3D/T_out > 1
+                test_l2_full += lossFuncDelta(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item() # overall T_out steps loss
+
+                # accumulated T_out steps loss
+                for t in range(0, T_out):
+                    test_l2_step += lossFunc(pred[..., -T_out+t], yy[..., -T_out+t]).item()
             else:
                 for t in range(0, T_out):
                     y = yy[..., t:t+1]
                     im = model(xx)
-                    # loss += lossFuncDelta(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
                     if t == 0:
                         loss += lossFuncDelta(im, y, xx[..., -1:], xx[..., -1:])
@@ -519,13 +554,16 @@ for ep in range(epochs):
                     # autoregression [xx will be overidden with new feautures if teacher forcing is off]
                     xx = torch.cat((xx[..., 1:], im), dim=-1)  # concat
                     if teacher_forcing_tout != 0:
-                        test_l2_step += loss.item() # add loss for current out step
+                        test_l2_step += loss.item() # accumulate loss for current out step
                         loss = 0
 
-                test_l2_full += lossFunc(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+                # overall T_out steps loss
+                if T_out > 1:
+                    # TODO: add gradient and time derivative loss for FNO3D/T_out > 1
+                    test_l2_full += lossFunc(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
                 
                 if teacher_forcing_tout == 0:
-                    test_l2_step += loss.item() # add bulk loss for T_out steps
+                    test_l2_step += loss.item() # accumulate bulk loss for T_out steps
     
     t2 = default_timer()
     # scheduler.step()
@@ -533,25 +571,46 @@ for ep in range(epochs):
     #--------------------------------------------------------
     #log
 
-    # tensorboard log
-    epoch_train_loss_step =  train_l2_step / n_train / T_out
-    epoch_train_loss_full =  train_l2_full / n_train
+    if inference_type == 'multiple_step' or (T_out > 1 and teacher_forcing_tout == 0): 
+        # tensorboard log
+        epoch_train_loss_step =  train_l2_step / n_train / T_out
+        epoch_train_loss_full =  train_l2_full / n_train
 
-    epoch_test_loss_step =  test_l2_step / n_test / T_out
-    epoch_test_loss_full =  test_l2_full / n_test
+        epoch_test_loss_step =  test_l2_step / n_test / T_out
+        epoch_test_loss_full =  test_l2_full / n_test
 
-    writer.add_scalar("Loss Step/train", epoch_train_loss_step, ep + prev_ep)
-    writer.add_scalar("Loss Full/train", epoch_train_loss_full, ep + prev_ep)
+        # log file
+        writer.add_scalar("Loss Step/train", epoch_train_loss_step, ep + prev_ep)
+        writer.add_scalar("Loss Full/train", epoch_train_loss_full, ep + prev_ep)
 
-    writer.add_scalar("Loss Step/test", epoch_test_loss_step, ep + prev_ep)
-    writer.add_scalar("Loss Full/test", epoch_test_loss_full, ep + prev_ep)
+        writer.add_scalar("Loss Step/test", epoch_test_loss_step, ep + prev_ep)
+        writer.add_scalar("Loss Full/test", epoch_test_loss_full, ep + prev_ep)
 
-    # log file and print
-    # not using same string due to formatting visualization differences
-    f.write('\n')
-    log_str = '{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}'.format(ep + prev_ep, t2-t1, epoch_train_loss_step, epoch_train_loss_full, epoch_test_loss_step, epoch_test_loss_full)
-    f.write(log_str)
-    print(f'{ep + prev_ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
+        f.write('\n')
+        log_str = '{}\t\t{}\t\t{}\t\t{}\t\t{}\t\t{}'.format(ep + prev_ep, t2-t1, epoch_train_loss_step, epoch_train_loss_full, epoch_test_loss_step, epoch_test_loss_full)
+        f.write(log_str)
+        
+        # print
+        # not using same string due to formatting visualization differences
+        print(f'{ep + prev_ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
+    else: # single step or teacher forcing on T_out output steps
+        # tensorboard log
+        epoch_train_loss =  train_l2_step / n_train
+
+        epoch_test_loss =  test_l2_step / n_test
+
+        # log file
+        writer.add_scalar("Loss/train", epoch_train_loss, ep + prev_ep)
+
+        writer.add_scalar("Loss/test", epoch_test_loss, ep + prev_ep)
+
+        f.write('\n')
+        log_str = '{}\t\t{}\t\t{}\t\t{}'.format(ep + prev_ep, t2-t1, epoch_train_loss, epoch_test_loss)
+        f.write(log_str)
+        
+        # print
+        # not using same string as log file due to formatting visualization differences
+        print(f'{ep + prev_ep}\t{t2 - t1}\t\t{epoch_train_loss}\t\t{epoch_test_loss}')
 
 
     #--------------------------------------------------------
@@ -575,9 +634,13 @@ f.close()
 #writer.flush()
 writer.close()
 
-# final loss with 4 decimals    
-final_train_loss = '{:.4f}'.format(epoch_train_loss_full)
-final_test_loss = '{:.4f}'.format(epoch_test_loss_full)
+# final loss with 4 decimals  
+if inference_type == 'multiple_step' or (T_out > 1 and teacher_forcing_tout == 0):   
+    final_train_loss = '{:.4f}'.format(epoch_train_loss_full)
+    final_test_loss = '{:.4f}'.format(epoch_test_loss_full)
+else: # teacher forcing on T_out output steps
+    final_train_loss = '{:.4f}'.format(epoch_train_loss)
+    final_test_loss = '{:.4f}'.format(epoch_test_loss)
 
 print('___Training done!___')
 t2 = default_timer()
