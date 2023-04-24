@@ -126,12 +126,11 @@ class FNO2d(nn.Module):
         if self.mlp_q:
             self.q = MLP(self.width, 1, self.width * 4)
         else:
-            self.fc1 = nn.Linear(self.width, 128)
-            self.fc2 = nn.Linear(128, 1)
-        
-        self.last_conv = None
+            self.fc1 = nn.Linear(self.width, self.width * 4)
+            self.fc2 = nn.Linear(self.width * 4, 1)
+     
         if self.final_conv:
-            self.last_conv = nn.Conv2d(128, 128, 3, padding='same', dilation=2)
+            self.last_conv = nn.Conv2d(self.width * 4, self.width * 4, 3, padding='same', dilation=2)
 
     def forward(self, x):
         grid = self.get_grid(x.shape, x.device)
