@@ -95,6 +95,7 @@ class FNO2d(nn.Module):
         self.mlp_on = network_config['network_parameters'].getboolean('mlp_on')
         self.normalization_on = network_config['network_parameters'].getboolean('normalization_on')
         self.mlp_q = network_config['network_parameters'].getboolean('mlp_q')
+        self.final_conv = network_config['network_parameters'].getboolean('final_conv')
         
         #VIC-mod t_in is passed as parameter now, so that we can decide the number of input time steps
         #self.fc0 = nn.Linear(12, self.width)
@@ -127,6 +128,10 @@ class FNO2d(nn.Module):
         else:
             self.fc1 = nn.Linear(self.width, 128)
             self.fc2 = nn.Linear(128, 1)
+        
+        self.last_conv = None
+        if self.final_conv:
+            self.last_conv = nn.Conv2d(128, 128, 3, padding='same', dilation=2)
 
     def forward(self, x):
         grid = self.get_grid(x.shape, x.device)
@@ -160,6 +165,13 @@ class FNO2d(nn.Module):
             x = x.permute(0, 2, 3, 1)
             x = self.fc1(x)
             x = F.gelu(x)
+            
+            if self.final_conv:
+                x = x.permute(0, 3, 1, 2)
+                x = self.last_conv(x)
+                x = F.gelu(x)
+                x = x.permute(0, 2, 3, 1)
+                
             x = self.fc2(x)
         return x
 
