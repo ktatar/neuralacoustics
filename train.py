@@ -14,7 +14,7 @@ from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import count_params
-from neuralacoustics.utils import UnitGaussianNormalizer
+from neuralacoustics.utils import UnitGaussianNormalizer, GaussianNormalizer
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
 from torch.utils.tensorboard import SummaryWriter
 
@@ -238,13 +238,14 @@ test_u = u[-n_test:,:,:,T_in:T_in+T_out]
 
 a_normalizer = None
 y_normalizer = None
+print(train_u.shape)
 if normalize:
     print("Normalizing input and output data...")
-    a_normalizer = UnitGaussianNormalizer(train_a)
+    a_normalizer = GaussianNormalizer(u)
     train_a = a_normalizer.encode(train_a)
     test_a = a_normalizer.encode(test_a)
 
-    y_normalizer = UnitGaussianNormalizer(train_u)
+    y_normalizer = GaussianNormalizer(u)
     train_u = y_normalizer.encode(train_u)
 
 #print(train_u.shape, test_u.shape)
@@ -377,19 +378,41 @@ for ep in range(epochs):
                 
                 if t == 0:
                     # xx is ground truth input of steps: [0, T_in - 1]
-                    loss += myloss(im, xx[..., -1:], y, xx[..., -1:])
+                    x_prev = xx[..., -1:]
+                    y_prev = xx[..., -1:]
+                    pred_im = im
+                    if normalize:
+                        pred_im = y_normalizer.decode(pred_im)
+                        y = y_normalizer.decode(y)
+                        x_prev = y_normalizer.decode(x_prev)
+                        y_prev = y_normalizer.decode(y_prev)
+                        
+                    loss += myloss(pred_im, x_prev, y, y_prev)
 
-                    pred = im
+                    pred = pred_im
                 else:
                     # xx contains previously predicted steps: [t, T_in - 1 + t], 
                     # yy is ground truth outputs: [T_in, T_in + T_out - 1]
-                    loss += myloss(im, xx[..., -1:], y, yy[..., t-1:t])
+                    x_prev = xx[..., -1:]
+                    y_prev = yy[..., t-1:t]
+                    pred_im = im
+                    if normalize:
+                        pred_im = y_normalizer.decode(pred_im)
+                        y = y_normalizer.decode(y)
+                        x_prev = y_normalizer.decode(x_prev)
+                        y_prev = y_normalizer.decode(y_prev)
+                        
+                    loss += myloss(pred_im, x_prev, y, y_prev)
                     
-                    pred = torch.cat((pred, im), -1)
+                    pred = torch.cat((pred, pred_im), -1)
 
                 xx = torch.cat((xx[..., 1:], im), dim=-1)
 
             train_l2_step += loss.item()
+            
+            if normalize:
+                yy = y_normalizer.decode(yy)
+                
             l2_full = myloss_full(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
             train_l2_full += l2_full.item()
             #VIC not sure why not simply train_l2_full += myloss(...) and get rid of l2_full at once [as in test], but the result is slightly different!!!
@@ -423,12 +446,29 @@ for ep in range(epochs):
                     # loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
                     if t == 0:
-                        loss += myloss(im, xx[..., -1:], y, xx[..., -1:])
-                        pred = im
-                    else:
-                        loss += myloss(im, xx[..., -1:], y, yy[..., t-1:t])
+                        pred_im = im
+                        x_prev = xx[..., -1:]
+                        y_prev = xx[..., -1:]
                         
-                        pred = torch.cat((pred, im), -1)
+                        if normalize:
+                            pred_im = y_normalizer.decode(pred_im)
+                            x_prev = y_normalizer.decode(x_prev)
+                            y_prev = y_normalizer.decode(y_prev)
+                        
+                        loss += myloss(pred_im, x_prev, y, y_prev)
+                        pred = pred_im
+                    else:
+                        pred_im = im
+                        x_prev = xx[..., -1:]
+                        y_prev = yy[..., t-1:t]
+                        
+                        if normalize:
+                            pred_im = y_normalizer.decode(pred_im)
+                            x_prev = y_normalizer.decode(x_prev)
+                        
+                        loss += myloss(pred_im, x_prev, y, y_prev)
+                        
+                        pred = torch.cat((pred, pred_im), -1)
 
                     xx = torch.cat((xx[..., 1:], im), dim=-1)
 
