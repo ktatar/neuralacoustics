@@ -97,6 +97,9 @@ The key features of the data generation pipeline also apply to the training and 
     conda install scipy h5py matplotlib -c pytorch
 
 	conda install tensorboard -c conda-forge
+
+	conda install fvcore -c conda-forge
+
 	```
 
     If any library is not available from Anaconda or from the specified channel, try with:
