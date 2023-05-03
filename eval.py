@@ -120,8 +120,8 @@ else :
 a_normalizer = None
 y_normalizer = None
 if normalize:
-    a_normalizer = torch.load(model_path)['a_normalizer']
-    y_normalizer = torch.load(model_path)['y_normalizer']
+    a_normalizer = torch.load(model_path, map_location=torch.device('cpu'))['a_normalizer']
+    y_normalizer = torch.load(model_path, map_location=torch.device('cpu'))['y_normalizer']
 
 if dev == 'gpu' or 'cuda' in dev:
     assert(torch.cuda.is_available())
@@ -240,14 +240,14 @@ with torch.no_grad():
                 label_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out]= label[0, mic_x, mic_y, :]
 
             if normalize:
-                prediction = y_normalizer.decode(prediction)
+                pred_output = y_normalizer.decode(prediction)
 
             # Only plot domain with small iteration number
             if iterations <= 5:
                 for k in range(data_t_out):
-                    domains = torch.stack([prediction[0, :, :, k], 
+                    domains = torch.stack([pred_output[0, :, :, k], 
                                            label[0, :, :, k], 
-                                           prediction[0, :, :, k] - label[0, :, :, k]])
+                                           pred_output[0, :, :, k] - label[0, :, :, k]])
                     titles = ['Prediction', 'Ground Truth', 'Difference']
                     plot3Domains(domains, pause=pause_sec,
                                  figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
@@ -256,8 +256,11 @@ with torch.no_grad():
             features = prediction[:, :, :, -T_in:].reshape(1, S, S, 1, T_in).repeat([1, 1, 1, data_t_out, 1])  
             
         else:
+            if normalize:
+                pred_output = y_normalizer.decode(prediction)
+            
             if plot_waveform:
-                pred_waveform[T_in + i] = prediction[0, mic_x, mic_y, 0]
+                pred_waveform[T_in + i] = pred_output[0, mic_x, mic_y, 0]
                 label_waveform[T_in + i] = label[0, mic_x, mic_y, 0]
 
             # pred_squared = torch.square(prediction)
@@ -270,7 +273,7 @@ with torch.no_grad():
             
             # Only plot domain with small iteration number
             if iterations <= 200:
-                domains = torch.stack([prediction, label, prediction - label]) # prediction shape: [1, 64, 64, 1]
+                domains = torch.stack([pred_output, label, pred_output - label]) # prediction shape: [1, 64, 64, 1]
                 titles = ['Prediction', 'Ground Truth', 'Difference']
                 plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
                             figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)

@@ -254,6 +254,32 @@ class RangeNormalizer(object):
         x = x.view(s)
         return x
 
+# Min-max normalization
+class MinMaxNormalizer(object):
+    def __init__(self, x, low=0.0, high=1.0):
+        super(MinMaxNormalizer, self).__init__()
+        mymin = torch.min(x)
+        mymax = torch.max(x)
+
+        self.a = (high - low)/(mymax - mymin)
+        self.b = -self.a * mymax + high
+
+    def encode(self, x):
+        x = self.a * x + self.b
+        return x
+
+    def decode(self, x):
+        x = (x - self.b) / self.a
+        return x
+
+    def cuda(self):
+        self.a = self.a.cuda()
+        self.b = self.b.cuda()
+
+    def cpu(self):
+        self.a = self.a.cpu()
+        self.b = self.b.cpu()
+
 #loss function with rel/abs Lp loss
 class LpLoss(object):
     def __init__(self, d=2, p=2, size_average=True, reduction=True):

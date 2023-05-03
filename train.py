@@ -14,7 +14,7 @@ from neuralacoustics.utils import getProjectRoot
 from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 from neuralacoustics.utils import count_params
-from neuralacoustics.utils import UnitGaussianNormalizer, GaussianNormalizer
+from neuralacoustics.utils import GaussianNormalizer, MinMaxNormalizer
 from neuralacoustics.adam import Adam # adam implementation that deals with complex tensors correctly [lacking in pytorch <=1.8, not sure afterwards]
 from torch.utils.tensorboard import SummaryWriter
 
@@ -110,6 +110,7 @@ checkpoint_step = config['training'].getint('checkpoint_step')
 
 # Normalization
 normalize = config['training'].getint('normalize_data')
+normalizer_type = config['training'].get('normalizer')
 
 
 # misc parameters
@@ -241,11 +242,18 @@ y_normalizer = None
 print(train_u.shape)
 if normalize:
     print("Normalizing input and output data...")
-    a_normalizer = GaussianNormalizer(u)
+    if normalizer_type == 'min_max':
+        a_normalizer = MinMaxNormalizer(u)
+        y_normalizer = MinMaxNormalizer(u)
+    elif normalizer_type == 'gaussian':
+        a_normalizer = GaussianNormalizer(u)
+        y_normalizer = GaussianNormalizer(u)
+    else:
+        raise NotImplementedError(f"Normalizer type {normalizer_type} not found.")
+        
     train_a = a_normalizer.encode(train_a)
     test_a = a_normalizer.encode(test_a)
 
-    y_normalizer = GaussianNormalizer(u)
     train_u = y_normalizer.encode(train_u)
 
 #print(train_u.shape, test_u.shape)
