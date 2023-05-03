@@ -4,6 +4,7 @@ import scipy.io # to save dataset
 from pathlib import Path # to properly handle paths and folders on every os
 from timeit import default_timer # to measure processing time
 from neuralacoustics.utils import openConfig
+import math
 
 N = -1
 B = -1
@@ -18,6 +19,7 @@ dryrun = -1
 dt = -1
 pause_sec = -1
 model = 0
+silence_index = []
 
 def load(config_path, ch, prj_root, pause):
     # in same style as load_test, this function writes the config variables to global variables.
@@ -34,6 +36,7 @@ def load(config_path, ch, prj_root, pause):
     global pause_sec
     global model
     global amp_factor
+    global silence_index
     
     #open config file
     generator_name = Path(__file__).stem
@@ -62,6 +65,13 @@ def load(config_path, ch, prj_root, pause):
     # dataset size
     N = config['dataset_generator_parameters'].getint('N') # num of dataset points
     B = config['dataset_generator_parameters'].getint('B') # batch size
+    silence_rate = config['dataset_generator_parameters'].getfloat('silence_rate') # rate of silence simulation
+    
+    silence_num = math.floor(N * silence_rate)
+    if silence_num != 0:
+        silence_step = N // silence_num
+        silence_index = [i for i in range(N) if i % silence_step == 0]
+    print("Silence index:", silence_index)
     
     # excitation amplitude factor
     amp_factor = config['numerical_model_parameters'].getfloat('amp_factor')
@@ -116,9 +126,9 @@ def load(config_path, ch, prj_root, pause):
     
     return num_of_batches, ch, rem, N, B, h, w, nsteps, dt, num_model_config_path
 
-def generate_datasetBatch(dev, dryrun):
+def generate_datasetBatch(dev, dryrun, cur_batch_num):
     if dryrun == 0:
-        ex_x, ex_y, ex_amp = generate_randImpulse_tensors(B) 
+        ex_x, ex_y, ex_amp = generate_randImpulse_tensors(B, cur_batch_num) 
         sol, sol_t = model.run(dev, B, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, ex_amp)
     else:
         ex_x, ex_y, ex_amp = generate_randImpulse_tensors(1) #create rand tensors for excitation and medium
@@ -126,11 +136,19 @@ def generate_datasetBatch(dev, dryrun):
     return sol, sol_t
 
 
-def generate_randImpulse_tensors(_B):
+def generate_randImpulse_tensors(_B, cur_batch_num=None):
     rd_x = torch.randint(0, w-2, (_B,)) 
     rd_y = torch.randint(0, h-2, (_B,))
     # rd_amp = torch.randn(_B)
     rd_amp = torch.rand(_B) * amp_factor # generate from uniform distribution
+    
+    if cur_batch_num is not None:
+        for i in range(_B):
+            cur_entry_index = cur_batch_num * _B + i
+            if cur_entry_index in silence_index:
+                # print("Setting amplitude to 0:", cur_entry_index)
+                rd_amp[i] = 0.0
+        
     return rd_x, rd_y, rd_amp
 
 def getSolverInfoFromModel():

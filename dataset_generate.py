@@ -141,7 +141,7 @@ if dryrun == 0:
     for b in range(num_of_batches):
 
         # compute all steps in full batch
-        sol, sol_t = generator.generate_datasetBatch(dev, dryrun) #generates dataset.
+        sol, sol_t = generator.generate_datasetBatch(dev, dryrun, b) #generates dataset.
         
         # store
         u[n_cnt:(n_cnt+B),...] = sol # results
