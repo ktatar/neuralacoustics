@@ -241,6 +241,8 @@ with torch.no_grad():
 
             if normalize:
                 pred_output = y_normalizer.decode(prediction)
+            else:
+                pred_output = prediction
 
             # Only plot domain with small iteration number
             if iterations <= 5:
@@ -258,6 +260,8 @@ with torch.no_grad():
         else:
             if normalize:
                 pred_output = y_normalizer.decode(prediction)
+            else:
+                pred_output = prediction
             
             if plot_waveform:
                 pred_waveform[T_in + i] = pred_output[0, mic_x, mic_y, 0]
