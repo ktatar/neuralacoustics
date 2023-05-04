@@ -147,7 +147,7 @@ def generate_randImpulse_tensors(_B, cur_batch_num=None):
             cur_entry_index = cur_batch_num * _B + i
             if cur_entry_index in silence_index:
                 # print("Setting amplitude to 0:", cur_entry_index)
-                rd_amp[i] = 0.0
+                rd_amp[i] = 0.001
         
     return rd_x, rd_y, rd_amp
 
