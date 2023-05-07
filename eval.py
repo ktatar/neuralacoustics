@@ -118,6 +118,8 @@ if not model_path.is_file():
     checkpoints = [x.name for x in list(checkpoint_path.glob('*'))]
     checkpoints.sort()
     model_path = checkpoint_path.joinpath(checkpoints[-1])
+    checkpoint_name = checkpoints[-1]
+    print(f"\tlast checkpoint: {checkpoint_name}")
 elif checkpoint_name != "":
     print(f"\tcheckpoint: {checkpoint_name}")
 
@@ -131,11 +133,17 @@ if dev == 'gpu' or 'cuda' in dev:
     assert(torch.cuda.is_available())
     dev = torch.device('cuda')
     model = network(network_config_path, T_in).cuda()
-    model.load_state_dict(torch.load(model_path)['model_state_dict'])
+    if checkpoint_name == "":
+        model.load_state_dict(torch.load(model_path).state_dict())
+    else:
+        model.load_state_dict(torch.load(model_path)['model_state_dict'])
 else:
     dev = torch.device('cpu')
     model = network(network_config_path, T_in)
-    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
+    if checkpoint_name == "":
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')).state_dict())
+    else:
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
 
 
 #---------------------------------------------------------------------
