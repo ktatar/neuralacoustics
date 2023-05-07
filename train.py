@@ -141,19 +141,31 @@ seed = config['training'].getint('seed')
 
 dev = config['training'].get('dev')
 
-print('Model and training parameters:')
-print(f'\tdataset name: {dataset_name}')
-print(f'\trequested training data points: {n_train}')
-print(f'\trequested test data points: {n_test}')
-print(f'\tinput steps: {T_in}')
-print(f'\toutput steps: {T_out}')
-print(f'\tbatch size: {batch_size}')
-print(f'\tepochs: {epochs}')
-print(f'\tlearning_rate: {learning_rate}')
-print(f'\tscheduler_step: {scheduler_step}')
-print(f'\tscheduler_gamma: {scheduler_gamma}')
-print(f'\tcheckpoint_step: {checkpoint_step}')
-print(f'\trandom seed: {seed}')
+header_log = (
+    f'Model and training parameters:\n'
+    f'\tdataset name: {dataset_name}\n'
+    f'\trequested training data points: {n_train}\n'
+    f'\trequested test data points: {n_test}\n'
+    f'\tinput steps: {T_in}\n'
+    f'\toutput steps: {T_out}\n'
+    f'\tbatch size: {batch_size}\n'
+    f'\tepochs: {epochs}\n'
+    f'\tteacher_forcing_tout: {teacher_forcing_tout}\n'
+    f'\tteacher_forcing_steps: {teacher_forcing_steps}\n'
+    f'\tlearning_rate: {learning_rate}\n'
+    f'\tscheduler_step: {scheduler_step}\n'
+    f'\tscheduler_gamma: {scheduler_gamma}\n'
+    f'\tloss_weight: {loss_weight}\n'
+    f'\tloss_weight_dt: {loss_weight_dt}\n'
+    f'\tloss_weight_ds: {loss_weight_ds}\n'
+    f'\tnormalize_data: {normalize}\n'
+    f'\ttransfer_learning: {transfer_learning}\n'
+    f'\tcheckpoint_step: {checkpoint_step}\n'
+    f'\trandom seed: {seed}\n'
+)
+
+print(header_log)
+
 
 
 #-------------------------------------------------------------------------------
@@ -214,8 +226,12 @@ model_path = model_dir.joinpath(model_name) # full path to model: dir+name
 model_checkpoint_dir = model_dir.joinpath("checkpoints")
 model_checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-# Open txt file for logging
+# Open txt file for epochs logging
 f = open(str(model_path)+'.log', 'w')
+# immediately write header
+f.write(header_log)
+f.write("\n") 
+f.flush()
 
 # tensorboard
 writer = SummaryWriter(str(model_dir.joinpath("tensorboard")))
@@ -395,7 +411,7 @@ elif T_out > 1 and inference_type == 'multiple_step':
 # train!
 
 print('\n___Start training!___')
-t1 = default_timer()
+t_start = default_timer()
 
 # log and print headers
 # not using same string due to formatting visualization differences
@@ -635,11 +651,7 @@ for ep in range(epochs):
         },
         save_model_path)
         print(f"\t----> checkpoint {save_model_name} saved")
-
-
-f.close()
-#writer.flush()
-writer.close()
+        f.flush() # flush log at every checkpoint
 
 # final loss with 4 decimals  
 if inference_type == 'multiple_step' or (T_out > 1 and teacher_forcing_tout == 0):   
@@ -650,9 +662,22 @@ else: # teacher forcing on T_out output steps
     final_test_loss = '{:.4f}'.format(epoch_test_loss)
 
 print('___Training done!___')
-t2 = default_timer()
-train_duration = t2-t1
-print(f"Elapsed time: {train_duration} s")
+t_end = default_timer()
+train_duration = t_end-t_start
+
+# Calculate hours, minutes, and remaining seconds
+hours, remainder = divmod(train_duration, 3600)
+minutes, seconds = divmod(remainder, 60)
+
+# Format the output string
+log_str = f"Elapsed time: {int(hours):02d} hours, {int(minutes):02d} minutes and {int(seconds):02d}.{int((seconds-int(seconds))*1000):03d} seconds"
+f.write("\n\n"+log_str)
+
+f.close()
+#writer.flush()
+writer.close()
+
+print(log_str)
 
 
 #-------------------------------------------------------------------------------

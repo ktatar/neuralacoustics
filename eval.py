@@ -64,7 +64,11 @@ model_root = model_root.replace('PRJ_ROOT', prj_root)
 model_name = config['evaluation'].get('model_name')
 checkpoint_name = config['evaluation'].get('checkpoint_name')
 
-model_path = Path(model_root).joinpath(model_name).joinpath('checkpoints').joinpath(checkpoint_name)
+if checkpoint_name != "":
+    model_path = Path(model_root).joinpath(model_name).joinpath('checkpoints').joinpath(checkpoint_name)
+else:
+    model_path = Path(model_root).joinpath(model_name).joinpath(model_name)
+
 
 # Load model structure parameters
 model_ini_path = Path(model_root).joinpath(model_name).joinpath(model_name+'.ini')
@@ -108,13 +112,13 @@ g.manual_seed(seed)
 # Load model
 print(f"Load model: {model_name}")
 
-# Use the last checkpoint if the provided checkpoint is not valid
+# Use the last checkpoint if the provided checkpoint is not valid---we assume that path may be invalid only if checkpoint is passed
 if not model_path.is_file():
     checkpoint_path = Path(model_root).joinpath(model_name).joinpath('checkpoints')
     checkpoints = [x.name for x in list(checkpoint_path.glob('*'))]
     checkpoints.sort()
     model_path = checkpoint_path.joinpath(checkpoints[-1])
-else :
+elif checkpoint_name != "":
     print(f"\tcheckpoint: {checkpoint_name}")
 
 a_normalizer = None
@@ -284,6 +288,7 @@ with torch.no_grad():
                     'Prediction', 'Ground Truth'])
         sample_arr_pred = pred_waveform.cpu().detach().numpy()
         sample_arr_label = label_waveform.cpu().detach().numpy()
+        # TODO retrieve sample rate from dataset
         write('pred.wav', 44100, sample_arr_pred)
         write('label.wav', 44100, sample_arr_label)
     

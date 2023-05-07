@@ -90,7 +90,7 @@ The key features of the data generation pipeline also apply to the training and 
 4. Install required libraries in environment:
 
 	```
-    conda install pytorch torchvision torchaudio -c pytorch
+    conda install pytorch torchvision -c pytorch
 
     conda install cudatoolkit=11.3 -c pytorch
 

@@ -10,7 +10,9 @@ from neuralacoustics.utils import getConfigParser
 from neuralacoustics.utils import openConfig
 
 # for audio file
-import torchaudio
+#import torchaudio #VIC may not work on some systems, e.g., M1 Macs
+import numpy as np
+from scipy.io.wavfile import write
 
 #most of this is lifted directly from the dataset_generator file
 
@@ -88,10 +90,18 @@ else:
   mic_y = config['numerical_model_test'].getint('mic_y')
 
   samples = sol[0, mic_x, mic_y, :]
-  samples = samples.unsqueeze(0)
-
+  
   current_time = datetime.now()
   current_time = current_time.strftime('%Y-%m-%d_%H:%M:%S')
   file_name = f"{numerical_model_name}_{current_time}.wav"
 
-  torchaudio.save(file_name, samples, math.floor(1/dt))
+  
+  
+  #samples = torch.clamp(samples, -1, 1)
+
+  #samples = samples.unsqueeze(0)
+  #torchaudio.save(file_name, samples, math.floor(1/dt))
+  
+  samples = samples.cpu().detach().numpy()
+  write(file_name, math.floor(1/dt), samples)
+
