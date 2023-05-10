@@ -37,8 +37,8 @@ def load(config_path, prj_root):
 
     # load
     _load(solver, prj_root, config_path)  # loads solver
-
-    return
+    n_sol = getSolverInfo()['n_solutions']
+    return n_sol
 
 
 def load_test(config_path, prj_root):    
