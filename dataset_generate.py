@@ -65,7 +65,7 @@ print('Device:', dev)
 generator_function_list = ['load, generate_datasetBatch, getSolverInfoFromModel']  # specify which functions to load.
 generator, generator_config_path = import_fromScript(prj_root, config_path, generator_path, generator_config_path, function_list=generator_function_list)
 
-num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path = generator.load(generator_config_path, ch, prj_root, pause) #return number of batches, chunks, remainder, after loading
+num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path, n_sol = generator.load(generator_config_path, ch, prj_root, pause) #return number of batches, chunks, remainder, after loading
 
 batches_per_ch = num_of_batches//ch
 ch_size = batches_per_ch * B  # num of data points per chunk
@@ -95,7 +95,7 @@ if dryrun == 0:
     excite = torch.zeros(ch_size, h, w, nsteps+1) #VIC we will re-introduce at a certain point, to save continous excitation and other parameters, like mu and boundaries [first static then dynamic]
     
     # solutions u 
-    sol = torch.zeros(ch_size, h, w, nsteps+1)  # +1 becase initial condition is saved at beginning of solution time series!
+    sol = torch.zeros(ch_size, h, w, n_sol, nsteps+1)  # +1 becase initial condition is saved at beginning of solution time series!
 
     ch_cnt = 0  # keeps track of # of chunks, datapoints during loop.
     n_cnt = 0
@@ -123,7 +123,7 @@ if dryrun == 0:
 
           # reset initial conditions, solutions and data point count
           excite = torch.zeros(ch_size, h, w, nsteps+1)
-          sol = torch.zeros(ch_size, h, w, nsteps+1) 
+          sol = torch.zeros(ch_size, h, w, n_sol, nsteps+1) 
 
           n_cnt = 0
           
