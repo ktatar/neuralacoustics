@@ -8,7 +8,8 @@ info = {
   'description': 'temp',
   'mu': 'damping factor, positive and typically way below 1; defined as mu = (eta*dt)/2, with eta=dynamic viscosity of medium and dt=1/samplerate',
   'rho':  '\"propagation\" factor, positive and lte 0.5; defined as rho = [v*(ds/dt)]^2, with v=speed of wave in medium [also sqrt(tension/area density)], ds=size of each grid point/cell [same on x and y] and dt=1/samplerate',
-  'gamma': 'type of boundary: 0 if clamped edge, 1 if free edge'
+  'gamma': 'type of boundary: 0 if clamped edge, 1 if free edge',
+  'n_solutions': 3
 }
 
 # solver
@@ -308,8 +309,7 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
     # _mat files should contain extra entry [input -> a]
     # _dataste loader logic must be changed, so that T_in steps are taken from a[] and T_out from u[]
     # __nesteps+1 should be removed from dataset loader and dateset_generate [log] too 
-    sol = torch.zeros([b, updateFrameH, updateFrameW, nsteps+1], device=dev)
-    sol_t = torch.zeros(nsteps+1, device=dev)
+    sol = torch.zeros([b, updateFrameH, updateFrameW, 3, nsteps+1], device=dev)
       
 
     t=0.0
@@ -367,9 +367,8 @@ def run(dev, dt, nsteps, b, w, h, c, rho, mu, srcDir, exciteV, walls, pmls= 6, p
             print(f'step {step+1} of {nsteps}')
             plotDomain(pressure[0, updateStart:updateEndH, updateStart:updateEndW], pause=pause)
 
-        # save return values
-        sol[...,step+1] = PV_N[:, updateStart:updateEndH, updateStart:updateEndW, pv_n_pos_slice_p]
-        sol_t[step+1] = t
+        # sol tensor contains 3 solutions [..., a] where a = 0 is pressure, 1 is x velocity,  2 is y velocity
+        sol[...,step+1] = PV_N[:, updateStart:updateEndH, updateStart:updateEndW, 0:3]
                
         t += dt
         
