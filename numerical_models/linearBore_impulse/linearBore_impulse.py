@@ -31,11 +31,12 @@ def load(config_path, prj_root):
     
     # other params will be passed to run() at run-time
     #--------------------------------------------------------------
-
     # load
     _load(solver, prj_root, config_path)  # loads solver
 
-    return
+    n_sol = getSolverInfo()['n_solutions']
+
+    return n_sol
 
 def load_test(config_path, prj_root):    
     # to prevent python from declaring new local variables with the same names
@@ -92,7 +93,6 @@ def load_test(config_path, prj_root):
 def _load(solver_path, prj_root, config_path):
     global solver
     solver, _ = import_fromScript(prj_root, config_path, solver_path)
-
     return
 
 def run(dev, b, dt, nsteps, w, h, mu, rho, c, tube_x, tube_y, tube_length, tube_width, ex_mag, disp=False, dispRate=1, pause=0):
