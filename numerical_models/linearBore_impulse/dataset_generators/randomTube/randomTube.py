@@ -92,7 +92,7 @@ def load(config_path, ch, prj_root, pause):
     model_function_list = ['load, run']  # specify which functions to load.
     model, model_config_path = import_fromScript(prj_root, config_path, model_path, model_config_path, function_list=model_function_list)
 
-    model.load(model_config_path, prj_root)  # loads solver for model
+    n_sol = model.load(model_config_path, prj_root)  # loads solver for model
     
     #-----------------------------------------------------------------------------------------------------------------------------------
     torch.use_deterministic_algorithms(True) #enables determinism.
@@ -110,7 +110,7 @@ def load(config_path, ch, prj_root, pause):
     if ch == 0: # always at least one chunk!
       ch = 1
     
-    return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path
+    return num_of_batches, ch, N, B, h, w, nsteps, dt, model_config_path, n_sol
 
 def generate_datasetBatch(dev, dryrun):
     if dryrun == 0:
