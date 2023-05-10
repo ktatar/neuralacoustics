@@ -6,7 +6,8 @@ info = {
   'description': '2D explicit solver of irreducible wave equation, for transverse waves (xi = displacement), with static boundaries and acoustic parameters',
   'mu': 'damping factor, positive and typically way below 1; defined as mu = (eta*dt)/2, with eta=dynamic viscosity of medium and dt=1/samplerate',
   'rho':  '\"propagation\" factor, positive and lte 0.5; defined as rho = [v*(dt/ds)]^2, with v=speed of wave in medium [also sqrt(tension/area density)], ds=size of each grid point/cell [same on x and y] and dt=1/samplerate',
-  'gamma': 'type of boundary: 0 if clamped edge, 1 if free edge'
+  'gamma': 'type of boundary: 0 if clamped edge, 1 if free edge',
+  'n_solutions': 1
 }
 
 # solver
@@ -66,7 +67,7 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
   xi_lrtb  = torch.zeros([b, h-1, w-1, 4], device=dev) # temp tensor
 
   # where to save solutions
-  sol = torch.zeros([b, h, w, nsteps+1], device=dev)
+  sol = torch.zeros([b, h, w, 1, nsteps+1], device=dev)
   # nsteps+1 is the total duration of simulation -> initial condition+requested steps
 
   #sol[:, 1:h-1, 1:w-1, 0] = full_excitation[..., 0] # xi0, initial condition
@@ -122,7 +123,7 @@ def run(dev, dt, nsteps, b, w, h, mu, rho, gamma, excite, bnd=torch.empty(0, 1),
 
 
     # save return values
-    sol[...,step+1] = xi[...,2] # future state (output)
+    sol[...,0, step+1] = xi[...,2] # future state (output)
     
     # update
     xi[:,1:h-1,1:w-1,0] = xi[:,1:h-1,1:w-1,1]
