@@ -34,6 +34,7 @@ class DatasetManager:
         self.rem_size = config['dataset_details'].getint(
             'remainder_size')  # number of entries in reminder file (if any)
         self.rem = int(self.rem_size > 0)
+        self.n_sol = config['solver'].getint('n_solutions')
 
         # Store data filenames
         self.files = list(self.dataset_dir.glob('*'))
@@ -73,6 +74,7 @@ class DatasetManager:
 
         return start_ch, win, stride, T_in, T_out, win_lim
 
+
     def checkDatapointNum(self, n, p_num, start_ch):
         """Check whether there are enought datapoints."""
         p_total = (self.N - self.ch_size * start_ch) * \
@@ -81,6 +83,8 @@ class DatasetManager:
             f'\tAvailable points in the dataset (starting from chunk {start_ch}): {p_total}')
         print(f'\tPoints requested: {n}')
         assert(p_total >= n)
+
+    
 
     def loadData(self, n, T_in, T_out, stride=0, win_lim=0, start_ch=0, permute=False):
         """Load a subsection of dataset for training."""
@@ -106,17 +110,22 @@ class DatasetManager:
 
         # Load from the files to be completely read
         cnt = 0
+       
         for f in range(full_files):
             dataloader = MatReader(self.files[f + start_ch])
             excite = dataloader.read_field('excite')
             sol = dataloader.read_field('sol')
 
             # Unroll all entries with moving window
-            for e in range(self.ch_size):
+            for entry in range(self.ch_size):
                 for tt in range(p_num):
-                    t = tt * stride
-                    u[cnt, :, :, 0:T_in] = sol[e, :, :, t:t+T_in] + excite[e, :, :, t+1:t+T_in+1]
-                    u[cnt, :, :, T_in:T_in+T_out] = sol[e, :, :, t+T_in:t+T_in+T_out]
+                    T_in_start = tt * stride # for ease of indexing, could maybe rename
+                    T_in_end = T_in_start + T_in 
+                    T_out_start = T_in_end
+                    T_out_end = T_out_start + T_out
+
+                    u[cnt, :, :, 0:T_in] = self.combineExcitation(excite, sol, entry, T_in_start, T_in_end)
+                    u[cnt, :, :, T_in:T_in+T_out] = sol[entry, :, :, 0, T_out_start:T_out_end] # solution is in form of pressure/displacement always?
                     cnt += 1
 
         # Load the remaining file
@@ -125,18 +134,22 @@ class DatasetManager:
             dataloader = MatReader(self.files[start_ch + full_files])
             excite = dataloader.read_field('excite')
             sol = dataloader.read_field('sol')
-            data_entry = 0
+            entry = 0
             while (cnt < n):
                 for tt in range(p_num):
-                    t = tt * stride
+                    T_in_start = tt * stride # for ease of indexing
+                    T_in_end = T_in_start + T_in 
+                    T_out_start = T_in_end
+                    T_out_end = T_out_start + T_out
+
+                    u[cnt, :, :, 0:T_in] = self.combineExcitation(excite, sol, entry, T_in_start, T_in_end)
+                    u[cnt, :, :, T_in:T_in+T_out] = sol[entry, :, :, 0, T_out_start:T_out_end] # solution is in form of pressure/displacement always?
                     
-                    u[cnt, :, :, 0:T_in] = sol[data_entry, :, :, t:t+T_in] + excite[data_entry, :, :, t+1:t+T_in+1]
-                    u[cnt, :, :, T_in:T_in+T_out] = sol[data_entry, :, :, t+T_in:t+T_in+T_out]
                     cnt += 1
                     if (cnt >= n):
                         break
 
-                data_entry += 1
+                entry += 1
 
         # Permute dataset if required
         if (permute):
@@ -144,6 +157,28 @@ class DatasetManager:
             print(f'\tWith permutation of points')
 
         return u
+    
+    def combineExcitation(self, excite, sol, entry, T_in_start, T_in_end):
+        
+        combine = excite[entry, :, :, T_in_start+1:T_in_end+1]
+
+        if self.n_sol == 1:
+            # add pressure/displacement
+            combine += sol[entry, :, :, 0, T_in_start:T_in_end] 
+
+        elif self.n_sol == 2:
+            # add velocity
+            combine += sol[entry, :, :, 1, T_in_start:T_in_end]
+        
+        elif self.n_sol == 3:
+            # add both directional velocities
+            combine += (sol[entry, :, :, 1, T_in_start:T_in_end] + sol[entry, :, :, 2, T_in_start:T_in_end])
+        
+        else:
+            combine += 0
+        
+        return combine
+
 
     def loadDataEntry(self, n, T_in, T_out, entry):
         """Load data from one single data entry."""
@@ -171,10 +206,11 @@ class DatasetManager:
         dataloader = MatReader(self.files[file_index])
         excite = dataloader.read_field('excite')
         sol = dataloader.read_field('sol')
+        
         for tt in range(n):
-            u[cnt, :, :, 0:T_in] = sol[entry_in_file, :, :, tt:tt+T_in] + excite[entry_in_file, :, :, tt+1:tt+T_in+1]
-            u[cnt, :, :, T_in:T_in+T_out] = sol[entry_in_file, :, :, tt+T_in:tt+T_in+T_out]
 
+            u[cnt, :, :, 0:T_in] = self.combineExcitation(excite, sol, entry_in_file, tt, tt+T_in)
+            u[cnt, :, :, T_in:T_in+T_out] = sol[entry_in_file, :, :, tt+T_in:tt+T_in+T_out]
             cnt += 1
 
         return u
