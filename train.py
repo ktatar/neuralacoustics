@@ -381,6 +381,12 @@ for ep in range(epochs):
             # model outputs 1 timestep at a time [i.e., labels], so we iterate over T_out steps to compute loss
             for t in range(0, T_out):
                 y = yy[..., t:t+1]
+                
+                # Add noise to input
+                noise = torch.randn(xx.shape) * (torch.max(xx.clone()) * 0.05)
+                noise.to(xx.device)
+                xx += noise
+                
                 im = model(xx)
                 # loss += myloss(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
                 
