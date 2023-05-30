@@ -26,9 +26,7 @@ prj_root = getProjectRoot(__file__)
 config, config_path = getConfigParser(prj_root, __file__) # we call this script from command line directly
 # hence __file__ is not a path, just the file name with extension
 
-# read params from config file 
-# uses numerical_model_test section instead of dataset_generation section
-
+# read params from config file, numerical_model_test section
 
 # model
 numerical_model_ = config['numerical_model_test'].get('numerical_model') # keep original string for dataset config
@@ -37,7 +35,7 @@ numerical_model_name = Path(numerical_model_).parts[-1]
 print("Model name: ", numerical_model_name)
 print("Model directory: ", numerical_model_) #added printout
 
-model_path =  Path(numerical_model_.replace('PRJ_ROOT', prj_root)).joinpath(numerical_model_name+'.py') # actual path to file/model
+model_path = Path(numerical_model_.replace('PRJ_ROOT', prj_root)).joinpath(numerical_model_name+'.py') # actual path to file/model
 
 # model config file
 model_config_path = config['numerical_model_test'].get('numerical_model_config')
@@ -52,7 +50,7 @@ else:
 
 # load model
 # we want to load the package through potential subfolders
-model_path_folders =  model_path.parts # creates full paths and gets folders
+model_path_folders = model_path.parts # creates full paths and gets folders
 packages_struct = '.'.join(model_path_folders)[:-3] # append all parts and remove '.py' from file/package name
 
 # import 
@@ -77,18 +75,37 @@ print('Device:', dev)
 #----------------------------------------------------------------------------
 
 disp_rate = 1/1
+plot = config['numerical_model_test'].getint('plot')
 pause_sec = config['numerical_model_test'].getfloat('pause_sec') #seconds to pause in between sim.
+
 audio = config['numerical_model_test'].getint('audio')
 
-model.load_test(model_config_path, prj_root)
-if audio == 0:
-  model.run_test(dev, True, dispRate = disp_rate, pause = pause_sec)
-else:
-  sol, _, dt= model.run_test(dev, False)
-  
+# we need at least plot on
+if plot == 0 and audio == 0:
+    plot = 1
+
+if audio:
   mic_x = config['numerical_model_test'].getint('mic_x')
   mic_y = config['numerical_model_test'].getint('mic_y')
+  
+  config = openConfig(model_config_path, __file__)
+  w = config['numerical_model_parameters'].getint('w')
+  h = config['numerical_model_parameters'].getint('h')
+  if mic_x >= w or mic_y >= h:
+    raise AssertionError("mic_x/mic_y out of bound")
 
+  srate = config['numerical_model_parameters'].getint('samplerate')
+
+    
+
+
+model.load_test(model_config_path, prj_root)
+if plot:
+  sol, _ = model.run_test(dev, True, dispRate = disp_rate, pause = pause_sec)
+else:
+  sol, _ = model.run_test(dev, False)
+
+if audio:
   samples = sol[0, mic_x, mic_y, :]
   
   current_time = datetime.now()
@@ -103,5 +120,5 @@ else:
   #torchaudio.save(file_name, samples, math.floor(1/dt))
   
   samples = samples.cpu().detach().numpy()
-  write(file_name, math.floor(1/dt), samples)
+  write(file_name, srate, samples)
 

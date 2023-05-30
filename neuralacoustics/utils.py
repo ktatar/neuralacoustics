@@ -330,24 +330,16 @@ class LpLossDelta(object):
         self.ds = .01 # we use a fixed reasonable value, as the concept spatial resolution is not always straightforward in numerical models
 
     def rel_dt(self, x, x_prev, y, y_prev):
-        diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), 
-                                self.p, 
-                                1)
-        y_norms = torch.norm(y.reshape(y.shape[0], -1), 
-                             self.p, 
-                             1)
+        diff_norms = torch.norm(x.reshape(x.shape[0], -1) - y.reshape(y.shape[0], -1), self.p, 1)
+        y_norms = torch.norm(y.reshape(y.shape[0], -1), self.p, 1)
 
         rel_loss = diff_norms / y_norms
         
         x_dt = (x - x_prev) / self.dt
         y_dt = (y - y_prev) / self.dt
-        
-        dt_diff_norms = torch.norm(x_dt.reshape(x.shape[0], -1) - y_dt.reshape(y.shape[0], -1), 
-                                   self.p, 
-                                   1)
-        y_dt_norms = torch.norm(y_dt.reshape(y.shape[0], -1), 
-                                self.p, 
-                                1)
+
+        dt_diff_norms = torch.norm(x_dt.reshape(x.shape[0], -1) - y_dt.reshape(y.shape[0], -1), self.p, 1)
+        y_dt_norms = torch.norm(y_dt.reshape(y.shape[0], -1), self.p, 1)
         
         rel_loss_dt = dt_diff_norms / y_dt_norms
         

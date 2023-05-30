@@ -23,6 +23,8 @@ import numpy as np
 from networks.FNO2d.FNO2d import FNO2d
 # to load dataset
 from neuralacoustics.DatasetManager import DatasetManager
+# to compute and print loss
+from neuralacoustics.utils import LpLoss, LpLossDelta
 # to plot data entries (specific series of domains)
 from neuralacoustics.data_plotter import plot2Domains, plot3Domains, plotWaveform
 # for PyTorch DataLoader determinism
@@ -43,14 +45,33 @@ dataset_name = config['evaluation'].get('dataset_name')
 dataset_dir = config['evaluation'].get('dataset_dir')
 dataset_dir = dataset_dir.replace('PRJ_ROOT', prj_root)
 
+# Dataset config file
+dataset_config_path = Path(dataset_dir).joinpath(dataset_name).joinpath(dataset_name+'.ini') # dataset_dir/dataset_name/dataset_name.ini 
+
 # Evaluation setting
 entry = config['evaluation'].getint('entry')
 offset = config['evaluation'].getint('offset')
 iterations = config['evaluation'].getint('iterations')
+
+autoregr = config['evaluation'].getint('autoregressive')
+
+plot = config['evaluation'].getint('plot')
 pause_sec = config['evaluation'].getfloat('pause_sec')
 
+loss = config['evaluation'].getint('loss')
+if loss:
+    # if set negative, these values will be taken from training config of model
+    loss_weight = config['evaluation'].getfloat('loss_weight')
+    loss_weight_dt = config['evaluation'].getfloat('loss_weight_dt')
+    loss_weight_ds = config['evaluation'].getfloat('loss_weight_ds')
+
+audio = config['evaluation'].getint('audio')
 mic_x = config['evaluation'].getint('mic_x')
 mic_y = config['evaluation'].getint('mic_y')
+
+# we need at least plot on
+if plot == 0 and audio == 0:
+    plot = 1
 
 dev = config['evaluation'].get('dev')
 seed = config['evaluation'].getint('seed')
@@ -68,7 +89,6 @@ if checkpoint_name != "":
     model_path = Path(model_root).joinpath(model_name).joinpath('checkpoints').joinpath(checkpoint_name)
 else:
     model_path = Path(model_root).joinpath(model_name).joinpath(model_name)
-
 
 # Load model structure parameters
 model_ini_path = Path(model_root).joinpath(model_name).joinpath(model_name+'.ini')
@@ -88,7 +108,7 @@ network_path = network_dir / (network_name + '.py')
 
 network_config_path = model_ini_path
 
-# Read network inferrence type
+# Read network inference type
 network_config = openConfig(network_config_path, __file__)
 inference_type = network_config['network_details'].get('inference_type')
 
@@ -175,17 +195,17 @@ iterations = u_shape[0] # reload iterations
 assert(S == u_shape[2])
 
 # Prepare test set
-n_test = iterations
-test_a = u[0:1, :, :, :T_in] # auto-regressive, hence only need 1 initial input is needed
-test_u = u[-n_test:, :, :, T_in:T_in+data_t_out]
+# each datapoint is composed of fatures or 'a' [first T_in steps] and a label or 'u' [following data_t_out steps]
+test_a = u[0:1, :, :, :T_in] # but we need to extract only 1 initial set of features, then we either go autoregressively or we use previous labels
+test_u = u[:, :, :, T_in:T_in+data_t_out] # while we extract all labels
 
 #print(train_u.shape, test_u.shape)
 assert(S == test_u.shape[-2])
 assert(data_t_out == test_u.shape[-1])
 
 # Set plot_waveform flag to true if mic position is valid and iterations >= 2
-plot_waveform = mic_x >= 0 and mic_y >= 0 and u_shape[0] >= 2
-if plot_waveform:
+plot_waveform = plot == 1 and mic_x >= 0 and mic_y >= 0 and u_shape[0] >= 2
+if plot_waveform or audio:
     # Check validity of mic_x and mic_y
     if mic_x >= S or mic_y >= S:
         raise AssertionError("mic_x/mic_y out of bound")
@@ -205,6 +225,17 @@ if inference_type == 'multiple_step':
 else:
     test_a = test_a.reshape(1, S, S, T_in)
 
+if loss:
+    if loss_weight < 0:
+        loss_weight = model_config['training'].getfloat('loss_weight')
+    if loss_weight_dt < 0:
+        loss_weight_dt = model_config['training'].getfloat('loss_weight_dt')
+        print(loss_weight_dt) 
+    if loss_weight_ds < 0:
+        loss_weight_ds = model_config['network_details'].getfloat('loss_weight_ds')
+        
+    lossFuncDelta = LpLossDelta(size_average=False, weight=loss_weight, weight_dt=loss_weight_dt, weight_ds=loss_weight_ds)
+
 if platform == 'darwin':
     num_workers = 0 
 else:
@@ -217,9 +248,28 @@ print(f'\tdataset name: {dataset_name}')
 print(f'\trequested entry: {entry}')
 print(f'\trequested iterations: {iterations}')
 print(f'\ttotal timesteps: {iterations * data_t_out + T_in}')
-print(f'\tmic_x: {mic_x}')
-print(f'\tmic_y: {mic_y}')
+if autoregr:
+    print(f'\tautoregressive evaluation')
+else:
+    print(f'\tnon-autoregressive evaluation (single output evaluation)')
+
+if plot:
+    print(f'\tplot on')
+
+if loss:
+    print(f'\tloss on')
+    print(f'\t\tRMS loss weight: {loss_weight}')
+    print(f'\t\ttime derivative loss weight: {loss_weight_dt}')
+    print(f'\t\tgradient loss weight: {loss_weight_ds}')
+
+if audio:
+    print(f'\taudio on')
+    print(f'\t\tmic_x: {mic_x}')
+    print(f'\t\tmic_y: {mic_y}')
+
 print(f'\trandom seed: {seed}\n')
+print(f'\tdevice: {dev}\n')
+
 
 #---------------------------------------------------------------------
 # Start evaluation
@@ -230,13 +280,15 @@ if normalize:
     else:
         y_normalizer.cpu()
 
+features = test_a.to(dev)
+# print(features.shape)
+if loss:
+    label_prev = features[..., -1]
+    label_prev = label_prev.unsqueeze(-1)
+
 model.eval()
 with torch.no_grad():
     for i in range(iterations):
-        if i == 0:
-            features = test_a.to(dev)
-            print(features.shape)
-        
         label = test_u[i:i+1, ...].to(dev)
 
         t1 = default_timer()
@@ -247,15 +299,19 @@ with torch.no_grad():
         if inference_type == 'multiple_step':
             prediction = prediction.view(1, S, S, data_t_out)
             
-            if plot_waveform:
+            if plot_waveform or audio:
                 pred_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out] = prediction[0, mic_x, mic_y, :]
                 label_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out]= label[0, mic_x, mic_y, :]
 
             if normalize:
                 prediction = y_normalizer.decode(prediction)
 
-            # Only plot domain with small iteration number
-            if iterations <= 5:
+            if plot:
+                if loss:
+                    # at first iteration, prepare current input in loss function
+                    curr_input = features[..., 0, -1]
+                    curr_input = curr_input.unsqueeze(-1)
+
                 for k in range(data_t_out):
                     domains = torch.stack([prediction[0, :, :, k], 
                                            label[0, :, :, k], 
@@ -263,12 +319,24 @@ with torch.no_grad():
                     titles = ['Prediction', 'Ground Truth', 'Difference']
                     plot3Domains(domains, pause=pause_sec,
                                  figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
+                    
+                    if loss:
+                        test_loss = lossFuncDelta(prediction[0, :, :, k], label[0, :, :, k], curr_input, label_prev) # prediction and label, followed by immediately preceeding steps, i.e., latest step in input/features and [previous label]
+                        if autoregr:
+                            curr_input = prediction[0, :, :, k] # next input in loss function will be current prediction
+                        else:
+                            curr_input = label[0, :, :, k] # next input in loss function will be current label
+                        label_prev = label
+                        print(f'\t Loss: {test_loss}')
             
-            # Auto-regressive    
-            features = prediction[:, :, :, -T_in:].reshape(1, S, S, 1, T_in).repeat([1, 1, 1, data_t_out, 1])  
-            
+            # Auto-regressive
+            if autoregr:    
+                features = prediction[:, :, :, -T_in:].reshape(1, S, S, 1, T_in).repeat([1, 1, 1, data_t_out, 1])  # append first prediction to previous features
+            # Single output
+            else:
+                features = label[:, :, :, -T_in:].reshape(1, S, S, 1, T_in).repeat([1, 1, 1, data_t_out, 1]) # append first label to previous features
         else:
-            if plot_waveform:
+            if plot_waveform or audio:
                 pred_waveform[T_in + i] = prediction[0, mic_x, mic_y, 0]
                 label_waveform[T_in + i] = label[0, mic_x, mic_y, 0]
 
@@ -280,25 +348,40 @@ with torch.no_grad():
             
             # print(f"Prediction energy: {pred_energy}\tlabel energy: {label_energy}")
             
-            # Only plot domain with small iteration number
-            if iterations <= 200:
+            if plot:
                 domains = torch.stack([prediction, label, prediction - label]) # prediction shape: [1, 64, 64, 1]
                 titles = ['Prediction', 'Ground Truth', 'Difference']
                 plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
                             figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
 
+            if loss:
+                curr_input = features[..., -1:]
+                test_loss = lossFuncDelta(prediction, label, curr_input, label_prev) # prediction and label, followed by immediately preceeding steps, i.e., latest step in input/features and previous label
+                label_prev = label
+                print(f'\t Loss: {test_loss}')
+            
             # Auto-regressive
-            features = torch.cat((features[..., 1:], prediction), -1)
+            if autoregr:
+                features = torch.cat((features[..., 1:], prediction), -1)
+            # Single step
+            else:
+                features = torch.cat((features[..., 1:], label), -1)
 
     # Plot waveform
     if plot_waveform:
         plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
                     'Prediction', 'Ground Truth'])
+    
+    # save mic capture are as audio files
+    if audio: 
         sample_arr_pred = pred_waveform.cpu().detach().numpy()
         sample_arr_label = label_waveform.cpu().detach().numpy()
-        # TODO retrieve sample rate from dataset
-        write('pred.wav', 44100, sample_arr_pred)
-        write('label.wav', 44100, sample_arr_label)
+        # retrieve sample rate from dataset
+        config = openConfig(dataset_config_path, __file__)
+        srate = config['numerical_model_parameters'].getint('samplerate')
+
+        write('pred.wav', srate, sample_arr_pred)
+        write('label.wav', srate, sample_arr_label)
     
     # Count operation number using the input
     if opcount:

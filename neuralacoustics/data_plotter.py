@@ -73,7 +73,7 @@ def plot2Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
   else:
     plt.pause(pause)
   plt.draw() # redraw fig, clear axes
-  plt.cla() # from https://stackoverflow.com/questions/10272478/why-does-my-pylab-animation-slow-down-with-each-update
+  plt.clf() # from https://stackoverflow.com/questions/10272478/why-does-my-pylab-animation-slow-down-with-each-update
 
 
 
@@ -140,7 +140,7 @@ def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
   else:
     plt.pause(pause)
   plt.draw() # redraw fig, clear axes
-  plt.cla() # from https://stackoverflow.com/questions/10272478/why-does-my-pylab-animation-slow-down-with-each-update
+  plt.clf() # from https://stackoverflow.com/questions/10272478/why-does-my-pylab-animation-slow-down-with-each-update
 
 
 

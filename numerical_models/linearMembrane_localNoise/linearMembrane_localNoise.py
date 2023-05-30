@@ -171,7 +171,7 @@ def run_test(dev, display, dispRate=1, pause=0):
     #call run using those parameters+global variables, and return the result.
     test_sol, test_sol_t = run(dev, _b, dt, nsteps, w, h, mu, rho, gamma, ex_x, ex_y, noise_submatrix, _disp, dispRate, pause)
     
-    return [test_sol, test_sol_t, dt]
+    return [test_sol, test_sol_t]
 
 def getSolverInfo():
     if solver == 0:
