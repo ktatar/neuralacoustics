@@ -106,7 +106,7 @@ else:
   sol, _ = model.run_test(dev, False)
 
 if audio:
-  samples = sol[0, mic_x, mic_y, :]
+  samples = sol[0, mic_y, mic_x, :]
   
   current_time = datetime.now()
   current_time = current_time.strftime('%Y-%m-%d_%H:%M:%S')

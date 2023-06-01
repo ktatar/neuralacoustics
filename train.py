@@ -101,16 +101,16 @@ if batch_size>n_test or n_test%batch_size!=0:
 
 epochs = config['training'].getint('epochs')
 
-# the two teacher forcing settings are mutually exclusive, proirity will be given to teacher_forcing_tout
-teacher_forcing_tout = config['training'].getint('teacher_forcing_tout') # train with autoregressive behavior over the T_out steps [works only if not multi-step model]
+# the two autoregressive settings are mutually exclusive, proirity will be given to autoregressive_tout
+autoregressive_tout = config['training'].getint('autoregressive_tout') # train with autoregressive behavior over the T_out steps [works only if not multi-step model]
 # works only if not multi-step model and more than one T_out step
 if inference_type == 'multiple_step' or T_out == 1:
-    teacher_forcing_tout = 0
-teacher_forcing_steps = config['training'].getint('teacher_forcing_steps') # train with autoregressive behavior over any consecutive steps [works for all models]
+    autoregressive_tout = 0
+autoregressive_steps = config['training'].getint('autoregressive_steps') # train with autoregressive behavior over any consecutive steps [works for all models]
 # if the stride is bigger than T_out, we cannot run an autoregressive train, 
 # because the input to the next step cannot be completely taken from the outputs of current step
-if win_stride > T_out or teacher_forcing_tout != 0 or teacher_forcing_steps == 1:
-    teacher_forcing_steps = 0
+if win_stride > T_out or autoregressive_tout != 0 or autoregressive_steps == 1:
+    autoregressive_steps = 0
 
 learning_rate = config['training'].getfloat('learning_rate')
 scheduler_type = config['training'].get('scheduler')
@@ -146,12 +146,12 @@ header_log = (
     f'\tdataset name: {dataset_name}\n'
     f'\trequested training data points: {n_train}\n'
     f'\trequested test data points: {n_test}\n'
-    f'\tinput steps: {T_in}\n'
-    f'\toutput steps: {T_out}\n'
+    f'\tinput steps (T_in): {T_in}\n'
+    f'\toutput steps (T_out): {T_out}\n'
     f'\tbatch size: {batch_size}\n'
     f'\tepochs: {epochs}\n'
-    f'\tteacher_forcing_tout: {teacher_forcing_tout}\n'
-    f'\tteacher_forcing_steps: {teacher_forcing_steps}\n'
+    f'\tautoregressive_tout: {autoregressive_tout}\n'
+    f'\tautoregressive_steps: {autoregressive_steps}\n'
     f'\tlearning_rate: {learning_rate}\n'
     f'\tscheduler_step: {scheduler_step}\n'
     f'\tscheduler_gamma: {scheduler_gamma}\n'
@@ -210,10 +210,13 @@ if load_model_name != "":
 
 # Determine saved model name and directory
 if load_model_name != "":
-    model_name = load_model_name + datetime.now().strftime('_%y-%m-%d_%H-%M-%S_continued')
+    time_string = datetime.now().strftime('_%y-%m-%d_%H-%M-%f')[:20]
+    model_name = load_model_name + time_string + '_continued'
 else:
     # date time and local host name
-    model_name = datetime.now().strftime('%y-%m-%d_%H-%M-%S_'+socket.gethostname())
+    time_string = datetime.now().strftime('%y-%m-%d_%H-%M-%f')[:19]
+    model_name = time_string + '_' + socket.gethostname()
+
 
 model_dir = model_root.joinpath(model_name) # the directory contains an extra folder with same name of model, that will include both model and log file
     
@@ -253,12 +256,13 @@ t1 = default_timer()
 n_train_p = n_train
 n_test_p = n_test
 
-# but in the case of teacher training across T_out output steps, each datapoint is a window of T_out examples!
+# but in the case of autoregressive training across T_out output steps, each datapoint is a window of T_out examples!
 # so we request fewer datapoints
-if teacher_forcing_tout == 1:
+if autoregressive_tout == 1:
     n_train_p = math.ceil(n_train / T_out)
     n_test_p = math.ceil(n_test / T_out)
     print(f'\tdata points will be extracted as {n_train_p+n_test_p} windows of {T_out} points each')
+    print('\t(each point extracted by the Dataset Manager will consist of a full window of points)')
     # if n_train is not a multiple of T_out, we cannot get n_train examples exactly, so we approximate by excess
     if (n_train % T_out) != 0:
         n_train = n_train_p * T_out
@@ -329,9 +333,9 @@ t2 = default_timer()
 
 print(f'\nDataset preprocessing finished, elapsed time: {t2-t1} s')
 
-if teacher_forcing_tout == 0:
+if autoregressive_tout == 0:
     output_shape = train_u.shape
-else: # if teacher forcing over T_out steps, the actual output spans a single timestep
+else: # if autoregressive over T_out steps, the actual output spans a single timestep
     output_shape = torch.zeros(batch_size,S,S,1).shape
 print(f'Training input shape: {train_a.shape}, output shape: {output_shape}')    
 
@@ -392,20 +396,22 @@ if load_model_name != "":
 
 
 #-------------------------------------------------------------------------------
-# teacher forcing
+# autoregressive, as opposed to default teacher forcing
 
-if teacher_forcing_steps > 1:
+if autoregressive_steps > 1:
     #  the maximum number of auto regressive steps we can do is the total number of points in each simulation, minus 1
     max_autregr_steps = int(( sim_len - (T_in+T_out) ) / win_stride) # here sim_len takes into account the chosen win_lim
-    if teacher_forcing_steps > max_autregr_steps:
-        teacher_forcing_steps = max_autregr_steps
+    if autoregressive_steps > max_autregr_steps:
+        autoregressive_steps = max_autregr_steps
 
-if teacher_forcing_steps>0:
-    print(f'\nTeacher forcing enabled on {teacher_forcing_steps} consecutive steps')
-elif teacher_forcing_tout==1:
-    print(f'\nTeacher forcing enabled on model\'s {T_out} T_out steps')
-elif T_out > 1 and inference_type == 'multiple_step':
-    print(f'\nTraining averaged over model\' s {T_out} T_out steps')
+if autoregressive_steps>0:
+    print(f'\Autoregressive training on {autoregressive_steps} consecutive steps')
+elif autoregressive_tout==1:
+    print(f'\nAutoregressive training on model\'s {T_out} T_out steps')
+else :
+    print('\nTeacher forcing training')
+    if T_out > 1 and inference_type == 'multiple_step':
+        print(f'\nTraining averaged over model\' s {T_out} T_out steps')
 
 #-------------------------------------------------------------------------------
 # train!
@@ -415,10 +421,10 @@ t_start = default_timer()
 
 # log and print headers
 # not using same string due to formatting visualization differences
-if inference_type == 'multiple_step' or (T_out > 1 and teacher_forcing_tout == 0): 
+if inference_type == 'multiple_step' or (T_out > 1 and autoregressive_tout == 0): # multiple step model or teacher forcing traininig
     log_str = 'Epoch\tDuration\t\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test'
     print_str = 'Epoch\tDuration\t\t\tLoss Step Train\t\t\tLoss Full Train\t\t\tLoss Step Test\t\t\tLoss Full Test'
-else: # single step or teacher forcing on T_out output steps
+else: # single step or autoregressive on T_out output steps
     log_str = 'Epoch\tDuration\t\t\t\tLoss Train\t\t\tLoss Test'
     print_str = 'Epoch\tDuration\t\t\tLoss Train\t\t\tLoss Test'
 
@@ -443,12 +449,12 @@ for ep in range(epochs):
         # we always extract a new label...
         yy = yy.to(dev)
         # while inputs only if not in autoregressive step
-        if teacher_forcing_steps < 1 or (pnt_cnt_train % teacher_forcing_steps) == 0:
+        if autoregressive_steps < 1 or (pnt_cnt_train % autoregressive_steps) == 0:
             xx = x_.to(dev)
 
         # this is to prevent that a series of autoregressive steps happens across two simulations!
         pnt_cnt_train += 1
-        if pnt_cnt_train >= teacher_forcing_steps or (T_in+T_out + pnt_cnt_train*win_stride) >= sim_len:
+        if pnt_cnt_train >= autoregressive_steps or (T_in+T_out + pnt_cnt_train*win_stride) >= sim_len:
             pnt_cnt_train = 0
 
         if inference_type == 'multiple_step': 
@@ -461,7 +467,7 @@ for ep in range(epochs):
                 pred = y_normalizer.decode(pred)
                 yy = y_normalizer.decode(yy)
 
-            # autoregression [xx will be overidden with new feautures if teacher forcing is off]
+            # autoregression [xx will be overidden with new features if teacher forcing is on instead]
             pred_copy = pred.reshape(batch_size,S,S,1,T_out).repeat([1,1,1,T_out,1]) # reshape to prepare for concat
             xx_copy = torch.cat((xx[..., win_stride:], pred_copy[..., :win_stride]), dim=-1)  # concat and make a copy of xx
             xx = xx_copy.clone().detach()  # detach the copy to prevent backprop through it
@@ -495,14 +501,14 @@ for ep in range(epochs):
                     # yy is ground truth outputs: [T_in, T_in + T_out - 1]
                     loss += lossFuncDelta(im, y, xx[..., -1:], yy[..., t-1:t])
                     
-                    if teacher_forcing_tout == 0:
+                    if autoregressive_tout == 0:
                         pred = torch.cat((pred, im), -1)
 
-                # autoregression [xx will be overidden with new feautures if teacher forcing is off]
+                # autoregression [xx will be overidden with new features if teacher forcing is on instead]
                 xx_copy = torch.cat((xx[..., 1:], im), dim=-1)  # concat make a copy of xx
                 xx = xx_copy.clone().detach()  # detach the copy to prevent backprop through it
 
-                if teacher_forcing_tout != 0:
+                if autoregressive_tout != 0:
                     train_l2_step += loss.item() # accumulate loss for current out step
                     optimizer.zero_grad()
                     loss.backward(retain_graph=True)                    
@@ -510,7 +516,7 @@ for ep in range(epochs):
                     scheduler.step()
                     loss = 0
             
-            if teacher_forcing_tout == 0:
+            if autoregressive_tout == 0:
                 # overall T_out steps loss
                 if T_out > 1:
                     # TODO: add gradient and time derivative loss for FNO3D/T_out > 1
@@ -537,12 +543,12 @@ for ep in range(epochs):
             # we always extract a new label...
             yy = yy.to(dev)
             # while inputs only if not in autoregressive step
-            if teacher_forcing_steps < 1 or (pnt_cnt_test % teacher_forcing_steps) == 0:
+            if autoregressive_steps < 1 or (pnt_cnt_test % autoregressive_steps) == 0:
                 xx = x_.to(dev)
 
             # this is to prevent that a series of autoregressive steps happens across two simulations!
             pnt_cnt_test += 1
-            if pnt_cnt_test >= teacher_forcing_steps or (T_in+T_out + pnt_cnt_test*win_stride) >= sim_len:
+            if pnt_cnt_test >= autoregressive_steps or (T_in+T_out + pnt_cnt_test*win_stride) >= sim_len:
                 pnt_cnt_test = 0
 
             if inference_type == 'multiple_step':
@@ -550,7 +556,7 @@ for ep in range(epochs):
                 if normalize:
                     pred = y_normalizer.decode(pred)
 
-                # autoregression [xx will be overidden with new feautures if teacher forcing is off]
+                # autoregression [xx will be overidden with new features if teacher forcing is on instead]
                 pred_copy = pred.reshape(batch_size,S,S,1,T_out).repeat([1,1,1,T_out,1]) # reshape to prepare for concat
                 xx = torch.cat((xx[..., win_stride:], pred_copy[..., :win_stride]), dim=-1)  # concat
 
@@ -571,16 +577,16 @@ for ep in range(epochs):
                     else:
                         loss += lossFuncDelta(im, y, xx[..., -1:], yy[..., t-1:t])
                         
-                        if teacher_forcing_tout == 0:
+                        if autoregressive_tout == 0:
                             pred = torch.cat((pred, im), -1)
 
-                    # autoregression [xx will be overidden with new feautures if teacher forcing is off]
+                    # autoregression [xx will be overidden with new features if teacher forcing is on instead]
                     xx = torch.cat((xx[..., 1:], im), dim=-1)  # concat
-                    if teacher_forcing_tout != 0:
+                    if autoregressive_tout != 0:
                         test_l2_step += loss.item() # accumulate loss for current out step
                         loss = 0
 
-                if teacher_forcing_tout == 0:
+                if autoregressive_tout == 0:
                     # overall T_out steps loss
                     if T_out > 1:
                         # TODO: add gradient and time derivative loss for FNO3D/T_out > 1
@@ -594,7 +600,7 @@ for ep in range(epochs):
     #--------------------------------------------------------
     #log
 
-    if inference_type == 'multiple_step' or (T_out > 1 and teacher_forcing_tout == 0): 
+    if inference_type == 'multiple_step' or (T_out > 1 and autoregressive_tout == 0): 
         # tensorboard log
         epoch_train_loss_step =  train_l2_step / n_train / T_out
         epoch_train_loss_full =  train_l2_full / n_train
@@ -616,7 +622,7 @@ for ep in range(epochs):
         # print
         # not using same string due to formatting visualization differences
         print(f'{ep + prev_ep}\t{t2 - t1}\t\t{epoch_train_loss_step}\t\t{epoch_train_loss_full}\t\t{epoch_test_loss_step}\t\t{epoch_test_loss_full}')
-    else: # single step or teacher forcing on T_out output steps
+    else: # single step or autoregressive on T_out output steps
         # tensorboard log
         epoch_train_loss =  train_l2_step / n_train
 
@@ -654,10 +660,10 @@ for ep in range(epochs):
         f.flush() # flush log at every checkpoint
 
 # final loss with 4 decimals  
-if inference_type == 'multiple_step' or (T_out > 1 and teacher_forcing_tout == 0):   
+if inference_type == 'multiple_step' or (T_out > 1 and autoregressive_tout == 0): # multiple step model or teacher forcing traininig
     final_train_loss = '{:.4f}'.format(epoch_train_loss_full)
     final_test_loss = '{:.4f}'.format(epoch_test_loss_full)
-else: # teacher forcing on T_out output steps
+else: # autoregressive on T_out output steps
     final_train_loss = '{:.4f}'.format(epoch_train_loss)
     final_test_loss = '{:.4f}'.format(epoch_test_loss)
 

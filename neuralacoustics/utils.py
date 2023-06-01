@@ -57,6 +57,7 @@ def seed_worker(worker_id):
 
 
 #VIC this is the content of: https://github.com/zongyi-li/fourier_neural_operator/blob/master/utilities3.py
+# plus edits
 
 #################################################
 #
@@ -484,7 +485,7 @@ class LpLossDelta(object):
 
         diff_norms = torch.norm(x.reshape(num_examples,-1) - y.reshape(num_examples,-1), self.p, 1)
         y_norms = torch.norm(y.reshape(num_examples,-1), self.p, 1)
-
+        
         if self.reduction:
             if self.size_average:
                 return torch.mean(diff_norms/y_norms)
@@ -493,6 +494,7 @@ class LpLossDelta(object):
 
         return diff_norms/y_norms
     
+    #TODO make this modular
     def __call__(self, x, y, x_prev=0, y_prev=0):
         if self.mode == 'dt':
             return self.rel_dt(x, x_prev, y, y_prev)

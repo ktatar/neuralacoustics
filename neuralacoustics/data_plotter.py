@@ -100,10 +100,10 @@ def plot3Domains(data, color_halfrange=1, maxAmp=20.0, log_min=10.0, pause=0.001
 
   if plot_waveform:
     highlight_points = []
-    if mic_x > 0: highlight_points.append([mic_x - 1, mic_y])
-    if mic_x < img1.shape[0] - 1: highlight_points.append([mic_x + 1, mic_y])
-    if mic_y > 0: highlight_points.append([mic_x, mic_y - 1])
-    if mic_y < img1.shape[1] - 1: highlight_points.append([mic_x, mic_y + 1])
+    if mic_x > 0: highlight_points.append([mic_y - 1, mic_x])
+    if mic_x < img1.shape[0] - 1: highlight_points.append([mic_y + 1, mic_x])
+    if mic_y > 0: highlight_points.append([mic_y, mic_x - 1])
+    if mic_y < img1.shape[1] - 1: highlight_points.append([mic_y, mic_x + 1])
 
     for pt in highlight_points:
       img1[pt[0], pt[1]] = -1
@@ -163,7 +163,7 @@ def plotWaveform(data, sr=44100, maxAmp=20.0, log_min=10.0, titles=None):
   # First plot
   fig.add_subplot(rows, columns, 1)
   plt.plot(t, img1, color='red')
-  plt.xlabel("Time (ms)")
+  plt.xlabel("Time [ms]")
   plt.ylabel("Amplitude")
   if titles != None:
     plt.title(titles[0]) 
@@ -171,7 +171,7 @@ def plotWaveform(data, sr=44100, maxAmp=20.0, log_min=10.0, titles=None):
   # Second plot
   fig.add_subplot(rows, columns, 2)
   plt.plot(t, img2, color='green')
-  plt.xlabel("Time (ms)")
+  plt.xlabel("Time [ms)]")
   plt.ylabel("Amplitude")
   if titles != None:
     plt.title(titles[1])

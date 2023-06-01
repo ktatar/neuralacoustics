@@ -212,8 +212,8 @@ if plot_waveform or audio:
 
     pred_waveform = torch.zeros(iterations * data_t_out + T_in)
     label_waveform = torch.zeros(iterations * data_t_out + T_in)
-    pred_waveform[:T_in] = test_a[0, mic_x, mic_y, :T_in]
-    label_waveform[:T_in] = test_a[0, mic_x, mic_y, :T_in]
+    pred_waveform[:T_in] = test_a[0, mic_y, mic_x, :T_in]
+    label_waveform[:T_in] = test_a[0, mic_y, mic_x, :T_in]
 
 # Normalize input data 
 if normalize:
@@ -300,8 +300,8 @@ with torch.no_grad():
             prediction = prediction.view(1, S, S, data_t_out)
             
             if plot_waveform or audio:
-                pred_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out] = prediction[0, mic_x, mic_y, :]
-                label_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out]= label[0, mic_x, mic_y, :]
+                pred_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out] = prediction[0, mic_y, mic_x, :]
+                label_waveform[T_in+i*data_t_out:T_in+(i+1)*data_t_out]= label[0, mic_y, mic_x, :]
 
             if normalize:
                 prediction = y_normalizer.decode(prediction)
@@ -316,7 +316,7 @@ with torch.no_grad():
                     domains = torch.stack([prediction[0, :, :, k], 
                                            label[0, :, :, k], 
                                            prediction[0, :, :, k] - label[0, :, :, k]])
-                    titles = ['Prediction', 'Ground Truth', 'Difference']
+                    titles = ['Prediction', 'Labels (Ground Truth)', 'Difference']
                     plot3Domains(domains, pause=pause_sec,
                                  figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
                     
@@ -337,8 +337,8 @@ with torch.no_grad():
                 features = label[:, :, :, -T_in:].reshape(1, S, S, 1, T_in).repeat([1, 1, 1, data_t_out, 1]) # append first label to previous features
         else:
             if plot_waveform or audio:
-                pred_waveform[T_in + i] = prediction[0, mic_x, mic_y, 0]
-                label_waveform[T_in + i] = label[0, mic_x, mic_y, 0]
+                pred_waveform[T_in + i] = prediction[0, mic_y, mic_x, 0]
+                label_waveform[T_in + i] = label[0, mic_y, mic_x, 0]
 
             # pred_squared = torch.square(prediction)
             # pred_energy = torch.sum(pred_squared)
@@ -350,7 +350,7 @@ with torch.no_grad():
             
             if plot:
                 domains = torch.stack([prediction, label, prediction - label]) # prediction shape: [1, 64, 64, 1]
-                titles = ['Prediction', 'Ground Truth', 'Difference']
+                titles = ['Prediction', 'Labels (Ground Truth)', 'Difference']
                 plot3Domains(domains[:, 0, ..., 0], pause=pause_sec,
                             figNum=1, titles=titles, mic_x=mic_x, mic_y=mic_y)
 
@@ -370,7 +370,7 @@ with torch.no_grad():
     # Plot waveform
     if plot_waveform:
         plotWaveform(data=torch.stack([pred_waveform, label_waveform]), titles=[
-                    'Prediction', 'Ground Truth'])
+                    'Prediction', 'Labels (Ground Truth)'])
     
     # save mic capture are as audio files
     if audio: 
